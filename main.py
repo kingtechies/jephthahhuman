@@ -74,7 +74,7 @@ class Jephthah:
         asyncio.create_task(self._apply_forever())
         asyncio.create_task(self._post_forever())
         asyncio.create_task(self._watch_news())
-        asyncio.create_task(self._solve_leetcode())
+        # asyncio.create_task(self._solve_leetcode())  # DISABLED - User request
         asyncio.create_task(self._trade_crypto())
         asyncio.create_task(self._check_emails())
         asyncio.create_task(self._evolve_daily())
