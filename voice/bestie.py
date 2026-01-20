@@ -6,8 +6,8 @@ from loguru import logger
 from config.settings import config
 
 try:
-    from telegram import Update, Bot
-    from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+    from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
     HAS_TELEGRAM = True
 except:
     HAS_TELEGRAM = False
@@ -39,6 +39,8 @@ class TelegramBestie:
         self.app.add_handler(CommandHandler("jobs", self._cmd_jobs))
         self.app.add_handler(CommandHandler("earnings", self._cmd_earnings))
         self.app.add_handler(CommandHandler("help", self._cmd_help))
+        self.app.add_handler(CommandHandler("invoice", self._cmd_invoice))
+        self.app.add_handler(CallbackQueryHandler(self._handle_payment_callback, pattern="^payment_"))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
         self.app.add_handler(MessageHandler(filters.VOICE, self._handle_voice))
         
@@ -534,6 +536,161 @@ Sent at: {datetime.utcnow().strftime('%H:%M')} UTC"""
             msg = f"📧 Email activity: {email_type}"
         
         await self.send(msg)
+    
+    async def _cmd_invoice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create and send an invoice"""
+        if str(update.effective_user.id) != str(self.owner_id) and self.owner_id:
+            return
+        
+        args = context.args
+        if len(args) < 3:
+            await update.message.reply_text(
+                "📄 **Create Invoice**\n\n"
+                "Usage: /invoice <client_email> <amount> <description>\n\n"
+                "Example: /invoice client@company.com 500 Website Development\n\n"
+                "Currency defaults to USD. Add NGN at end for Naira:\n"
+                "/invoice client@company.com 200000 Website Development NGN"
+            )
+            return
+        
+        try:
+            from money.invoicing import invoice_generator
+            
+            client_email = args[0]
+            amount = float(args[1])
+            currency = "NGN" if args[-1].upper() == "NGN" else "USD"
+            description = " ".join(args[2:-1] if currency == "NGN" else args[2:])
+            client_name = client_email.split("@")[0].title()
+            
+            invoice = invoice_generator.create_invoice(
+                client_name=client_name,
+                client_email=client_email,
+                description=description,
+                amount=amount,
+                currency=currency
+            )
+            
+            # Send invoice summary
+            summary = invoice_generator.get_invoice_summary(invoice["id"])
+            await update.message.reply_text(
+                f"✅ Invoice Created!\n\n{summary}\n\n"
+                f"📎 HTML: {invoice['html_path']}"
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"Error creating invoice: {e}")
+    
+    async def _handle_payment_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle payment verification button clicks"""
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data  # Format: payment_yes_INVOICEID or payment_no_INVOICEID
+        parts = data.split("_")
+        action = parts[1]  # yes or no
+        invoice_id = "_".join(parts[2:])  # INV-20260120-XXXXXX
+        
+        try:
+            from money.invoicing import invoice_generator, payment_verifier
+            
+            if action == "yes":
+                # Confirm payment
+                invoice_generator.mark_paid(invoice_id, "verified_by_owner")
+                inv = invoice_generator.get_invoice(invoice_id)
+                
+                await query.edit_message_text(
+                    f"✅ **PAYMENT CONFIRMED**\n\n"
+                    f"Invoice: {invoice_id}\n"
+                    f"Client: {inv['client_name']}\n"
+                    f"Amount: {inv['currency']} {inv['amount']:,.2f}\n\n"
+                    f"Thank you message will be sent to client."
+                )
+                
+                # Send thank you to client via email
+                from voice.email_handler import email_client
+                thank_you = f"""Dear {inv['client_name']},
+
+Thank you for your payment of {inv['currency']} {inv['amount']:,.2f} for "{inv['description']}".
+
+Your payment has been received and confirmed. It was a pleasure working with you!
+
+Best regards,
+Jephthah Ameh
+Full-Stack Developer
+jephthahameh.cfd"""
+                
+                await email_client.send_email(
+                    inv['client_email'],
+                    f"Payment Received - Thank You! (Invoice {invoice_id})",
+                    thank_you
+                )
+                
+            elif action == "no":
+                inv = invoice_generator.get_invoice(invoice_id)
+                
+                await query.edit_message_text(
+                    f"❌ **PAYMENT NOT RECEIVED**\n\n"
+                    f"Invoice: {invoice_id}\n"
+                    f"Client will be notified that payment is not yet received."
+                )
+                
+                # Notify client
+                from voice.email_handler import email_client
+                not_received = f"""Dear {inv['client_name']},
+
+Regarding Invoice {invoice_id} for {inv['currency']} {inv['amount']:,.2f}:
+
+We have not yet received your payment. If you have made the payment, please allow some time for processing or contact us with the transaction details.
+
+Payment details are included in the invoice.
+
+Best regards,
+Jephthah Ameh
+hireme@jephthahameh.cfd"""
+                
+                await email_client.send_email(
+                    inv['client_email'],
+                    f"Payment Status - Invoice {invoice_id}",
+                    not_received
+                )
+                
+        except Exception as e:
+            await query.edit_message_text(f"Error processing: {e}")
+    
+    async def send_payment_verification(self, invoice_id: str, amount: float, 
+                                        currency: str, payment_method: str, client_name: str):
+        """Send payment verification request with Yes/No buttons"""
+        if not self.bot or not self.owner_id:
+            return
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes, Received", callback_data=f"payment_yes_{invoice_id}"),
+                InlineKeyboardButton("❌ No, Not Yet", callback_data=f"payment_no_{invoice_id}"),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        msg = f"""💰 **PAYMENT VERIFICATION**
+
+📄 Invoice: {invoice_id}
+👤 Client: {client_name}
+💵 Amount: {currency} {amount:,.2f}
+🏦 Method: {payment_method}
+⏰ Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
+
+**Boss, have you received this payment?**"""
+        
+        try:
+            await self.bot.send_message(
+                chat_id=self.owner_id,
+                text=msg,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            logger.info(f"Payment verification sent for {invoice_id}")
+        except Exception as e:
+            logger.error(f"Payment verification send error: {e}")
 
 
 bestie = TelegramBestie()
