@@ -35,11 +35,11 @@ class PaymentDetails:
         "bank_address": "1801 Main St, Kansas City, MO 64108",
     }
     
-    # Crypto (will be updated from Bitcart when installed)
+    # Crypto Wallets
     CRYPTO = {
-        "btc_address": "",  # Will be set from Bitcart
-        "eth_address": "",  # Will be set from Bitcart
-        "tron_address": "",  # Will be set from Bitcart
+        "btc_address": "bc1qpuucy0rz2qxqwc2quhva2gznmdkn9hfur75re9",
+        "eth_address": "0xE7648CAd951e53FbCB6D29adCaf27eA946cC9B24",
+        "sol_address": "CLJmYam1vqnUXVYpQfadkhkMS3bamGYVGWNrwdY2UsJC",
     }
 
 
@@ -135,7 +135,7 @@ class InvoiceGenerator:
             <h3>Cryptocurrency Payment</h3>
             <p><strong>Bitcoin (BTC):</strong> <code>{PaymentDetails.CRYPTO['btc_address']}</code></p>
             <p><strong>Ethereum (ETH):</strong> <code>{PaymentDetails.CRYPTO['eth_address']}</code></p>
-            <p><strong>Tron (TRX):</strong> <code>{PaymentDetails.CRYPTO['tron_address']}</code></p>
+            <p><strong>Solana (SOL):</strong> <code>{PaymentDetails.CRYPTO['sol_address']}</code></p>
             """
         
         html = f"""<!DOCTYPE html>
