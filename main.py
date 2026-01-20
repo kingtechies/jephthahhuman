@@ -1,5 +1,6 @@
 import asyncio
 import signal
+import random
 from datetime import datetime
 from loguru import logger
 
@@ -11,6 +12,10 @@ from brain.infinite import infinite_brain
 from brain.consciousness import consciousness
 from brain.content import content_creator
 from brain.multitask import multitasker, self_learner, news_follower, course_creator, cold_mailer
+from brain.knowledge_graph import knowledge_graph
+from brain.pattern_memory import pattern_memory
+from brain.vocabulary import vocabulary
+from brain.content_engine import content_engine
 from brain.ai_prompter import ai_prompter, github_manager
 from brain.smart import smart
 from brain.opus import opus
@@ -115,15 +120,37 @@ class Jephthah:
     async def _post_forever(self):
         while self.running:
             try:
+                # Tweet using smart AI
                 tweet = await smart.write_tweet(infinite_brain.get_motivation())
                 await twitter.post_tweet(tweet)
                 
-                article_topic = "technology trends"
-                article = await smart.write_article(article_topic, 800)
+                # Generate article using MEMORY (no API after learning!)
+                topics = ["Python", "AI", "Web Development", "Cloud Computing", "DevOps"]
+                article_topic = random.choice(topics)
+                
+                # Try memory-based generation first
+                try:
+                    article_data = content_engine.generate_article(article_topic, word_count=800)
+                    article = article_data["content"]
+                    logger.info(f"Generated article from MEMORY: {article_data['used_api']}")
+                except Exception as e:
+                    # Fallback to AI if memory not sufficient yet
+                    logger.warning(f"Memory generation failed, using AI: {e}")
+                    article = await smart.write_article(article_topic, 800)
+                
                 await medium.write_article(article_topic, article)
                 
+                # LinkedIn post
                 post = await smart.write_tweet("business and tech")
                 await linkedin.post_update(post)
+                
+                # Learn from news articles to expand knowledge
+                news_items = await news_follower.check_news()
+                for item in news_items[:2]:
+                    if item.get("description"):
+                        knowledge_graph.learn_from_text(item["description"], source="news")
+                        pattern_memory.learn_from_article(item["description"], source="news")
+                
             except Exception as e:
                 await self._handle_error(str(e))
             await asyncio.sleep(3600)
