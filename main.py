@@ -1,7 +1,9 @@
 import asyncio
 import signal
 import random
+import json
 from datetime import datetime
+from pathlib import Path
 from loguru import logger
 
 logger.add("data/logs/jephthah_{time}.log", rotation="1 day", retention="30 days", level="DEBUG")
@@ -187,64 +189,77 @@ class Jephthah:
             await asyncio.sleep(3600)
     
     async def _check_emails(self):
-        """Reply to ALL emails - no exclusions"""
+        """Reply to ALL emails - track replied to avoid duplicates"""
+        # Load replied IDs from disk
+        replied_file = Path("data/replied_emails.json")
+        replied_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            if replied_file.exists():
+                with open(replied_file, 'r') as f:
+                    replied_ids = set(json.load(f))
+            else:
+                replied_ids = set()
+        except:
+            replied_ids = set()
+        
         while self.running:
             try:
-                # Get ALL emails (not just unread) to ensure nothing is missed
+                # Get recent emails
                 emails = await email_client.get_inbox(limit=20, unread_only=False)
-                
-                # Track which we've already processed
-                processed_ids = getattr(self, '_processed_email_ids', set())
                 
                 for em in emails:
                     email_id = em.get("id", "")
                     subject = em.get("subject", "")
                     sender = em.get("from", "")
+                    sender_name = sender.split("<")[0].strip() if "<" in sender else sender.split("@")[0]
                     body = em.get("body", "")[:1000]
                     
-                    # Skip if already processed or from ourselves
-                    if email_id in processed_ids:
+                    # Skip if already replied or from ourselves
+                    if email_id in replied_ids:
                         continue
                     if "jephthahameh.cfd" in sender.lower():
-                        continue  # Don't reply to our own emails
+                        continue
                     if not sender or not body.strip():
                         continue
                     
-                    # Notify about incoming email
+                    # Notify Telegram
                     is_priority = any(w in subject.lower() for w in ["interview", "opportunity", "job", "offer", "urgent"])
                     emoji = "🔥" if is_priority else "📧"
-                    await bestie.send(f"{emoji} Email from {sender[:30]}: {subject[:50]}")
+                    await bestie.send(f"{emoji} Email from {sender_name}: {subject[:50]}")
                     
-                    # Generate intelligent reply using AI
-                    prompt = f"""Reply professionally to this email:
-From: {sender}
-Subject: {subject}
-Body: {body[:500]}
+                    # Generate REAL reply - no placeholders
+                    prompt = f"""Write a professional email reply. Be specific and human - NO placeholders like [NAME] or [COMPANY].
 
-I am Jephthah Ameh, a full-stack developer. Be helpful, professional, and concise."""
+From: {sender_name}
+Subject: {subject}
+Their message: {body[:600]}
+
+I am Jephthah Ameh, a full-stack developer specializing in Python, Flutter, AI, and web development. 
+Contact: hireme@jephthahameh.cfd | Website: jephthahameh.cfd
+
+Write a helpful, specific reply addressing their actual message. Keep it under 150 words."""
                     
                     reply = await smart.ask(prompt)
-                    if reply:
+                    if reply and "[" not in reply:  # Reject if has placeholders
                         success = await email_client.reply(em, reply)
                         if success:
                             logger.info(f"✅ Replied to: {subject[:50]}")
-                            await bestie.send(f"✅ Replied to email: {subject[:50]}")
-                            processed_ids.add(email_id)
+                            await bestie.send(f"✅ Replied to {sender_name}: {subject[:40]}")
+                            replied_ids.add(email_id)
+                            
+                            # Save to disk immediately
+                            with open(replied_file, 'w') as f:
+                                json.dump(list(replied_ids), f)
+                            
                             await email_client.mark_read(email_id)
-                        else:
-                            logger.warning(f"Failed to reply to: {subject[:50]}")
                     
-                    # Small delay between replies to avoid spam detection
                     await asyncio.sleep(5)
-                
-                self._processed_email_ids = processed_ids
                 
             except Exception as e:
                 logger.error(f"Email check error: {e}")
-                if "password" in str(e).lower() or "auth" in str(e).lower():
-                    await bestie.send(f"⚠️ Email system error: Check password")
             
-            await asyncio.sleep(60)  # Check every minute
+            await asyncio.sleep(60)
     
     async def _evolve_daily(self):
         while self.running:
