@@ -39,7 +39,7 @@ class Memory(Base):
     memory_type = Column(String(50), index=True)
     key = Column(String(255), index=True)
     value = Column(Text)
-    metadata = Column(JSON, default={})
+    meta_data = Column(JSON, default={})
     importance = Column(Float, default=0.5)  # 0-1 scale
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -333,7 +333,7 @@ class JephthahMemory:
     # === KNOWLEDGE ===
     
     def remember(self, key: str, value: Any, memory_type: MemoryType, 
-                importance: float = 0.5, metadata: Dict = None):
+                importance: float = 0.5, extra_data: Dict = None):
         """Store something in memory"""
         session = self.Session()
         try:
@@ -345,7 +345,7 @@ class JephthahMemory:
             if memory:
                 memory.value = json.dumps(value) if not isinstance(value, str) else value
                 memory.importance = importance
-                memory.metadata = metadata or {}
+                memory.meta_data = extra_data or {}
                 memory.accessed_count += 1
             else:
                 memory = Memory(
@@ -353,7 +353,7 @@ class JephthahMemory:
                     key=key,
                     value=json.dumps(value) if not isinstance(value, str) else value,
                     importance=importance,
-                    metadata=metadata or {}
+                    meta_data=extra_data or {}
                 )
                 session.add(memory)
             

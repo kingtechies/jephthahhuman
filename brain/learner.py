@@ -75,7 +75,7 @@ class LearningEngine:
                 },
                 memory_type=MemoryType.KNOWLEDGE,
                 importance=0.5,
-                metadata={"topic": topic, "source_type": "web"}
+                extra_data={"topic": topic, "source_type": "web"}
             )
             
             # Update skill

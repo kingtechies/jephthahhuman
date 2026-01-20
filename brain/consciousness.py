@@ -117,7 +117,7 @@ Current focus: {self.current_focus}
             value=lesson,
             memory_type=MemoryType.KNOWLEDGE,
             importance=0.8,
-            metadata={"type": "lesson_learned"}
+            extra_data={"type": "lesson_learned"}
         )
         
         logger.info(f"Lesson learned: {lesson}")
