@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jephthah Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🤖</span>
+                    <h1>JEPHTHAH</h1>
+                    <span class="status-badge online">RUNNING</span>
+                </div>
+                <div class="header-time" id="current-time"></div>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <section class="stats-grid">
+            <div class="stat-card jobs">
+                <div class="stat-icon">💼</div>
+                <div class="stat-info">
+                    <h3>Jobs Applied</h3>
+                    <div class="stat-value" id="total-jobs">0</div>
+                    <div class="stat-secondary">Today: <span id="today-jobs">0</span></div>
+                </div>
+            </div>
+            <div class="stat-card emails">
+                <div class="stat-icon">📧</div>
+                <div class="stat-info">
+                    <h3>Emails</h3>
+                    <div class="stat-value" id="total-emails">0</div>
+                    <div class="stat-secondary">Sent today</div>
+                </div>
+            </div>
+            <div class="stat-card posts">
+                <div class="stat-icon">📝</div>
+                <div class="stat-info">
+                    <h3>Posts</h3>
+                    <div class="stat-value" id="total-posts">0</div>
+                    <div class="stat-secondary">Social media</div>
+                </div>
+            </div>
+            <div class="stat-card earnings">
+                <div class="stat-icon">💰</div>
+                <div class="stat-info">
+                    <h3>Goal</h3>
+                    <div class="stat-value">$1M</div>
+                    <div class="stat-secondary">Target</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Job Applications -->
+            <section class="panel applications-panel">
+                <div class="panel-header">
+                    <h2>Recent Job Applications</h2>
+                    <button class="refresh-btn" onclick="refreshData()">Refresh</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Title</th>
+                                <th>Company</th>
+                                <th>Site</th>
+                                <th>Salary</th>
+                            </tr>
+                        </thead>
+                        <tbody id="jobs-table">
+                            <tr>
+                                <td colspan="5" class="loading">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Activity Log -->
+            <section class="panel activity-panel">
+                <div class="panel-header">
+                    <h2>Activity Log</h2>
+                </div>
+                <div class="activity-list" id="activity-log">
+                    <div class="activity-item loading">Loading activity...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Sites Distribution -->
+        <section class="panel sites-panel">
+            <div class="panel-header">
+                <h2>Applications by Site</h2>
+            </div>
+            <div class="sites-grid" id="sites-distribution">
+                <!-- Filled by JS -->
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Fetch and display data
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                // Update stats
+                document.getElementById('total-jobs').textContent = data.jobs.total || 0;
+                document.getElementById('today-jobs').textContent = data.jobs.today || 0;
+                document.getElementById('total-emails').textContent = data.emails.sent || 0;
+
+                // Update jobs table
+                const jobsTable = document.getElementById('jobs-table');
+                if (data.jobs.recent && data.jobs.recent.length > 0) {
+                    jobsTable.innerHTML = data.jobs.recent.map(job => `
+                        <tr>
+                            <td>${formatTime(job.applied_at)}</td>
+                            <td class="job-title">${truncate(job.title, 40)}</td>
+                            <td>${truncate(job.company || 'Unknown', 20)}</td>
+                            <td><span class="site-badge">${job.site}</span></td>
+                            <td>${job.salary || 'N/A'}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    jobsTable.innerHTML = '<tr><td colspan="5" class="empty">No applications yet</td></tr>';
+                }
+
+                // Update activity log
+                const activityLog = document.getElementById('activity-log');
+                if (data.activity && data.activity.length > 0) {
+                    activityLog.innerHTML = data.activity.map(item => `
+                        <div class="activity-item ${item.level.toLowerCase()}">
+                            <span class="activity-time">${item.time}</span>
+                            <span class="activity-level">${item.level}</span>
+                            <span class="activity-message">${item.message}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    activityLog.innerHTML = '<div class="activity-item empty">No activity yet</div>';
+                }
+
+                // Update sites distribution
+                const sitesGrid = document.getElementById('sites-distribution');
+                if (data.jobs.by_site) {
+                    sitesGrid.innerHTML = Object.entries(data.jobs.by_site)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([site, count]) => `
+                            <div class="site-item">
+                                <span class="site-name">${site}</span>
+                                <span class="site-count">${count}</span>
+                            </div>
+                        `).join('');
+                }
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return 'N/A';
+            const date = new Date(isoString);
+            return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function truncate(str, len) {
+            if (!str) return '';
+            return str.length > len ? str.substring(0, len) + '...' : str;
+        }
+
+        function refreshData() {
+            fetchData();
+        }
+
+        // Initial fetch and auto-refresh every 30 seconds
+        fetchData();
+        setInterval(fetchData, 30000);
+    </script>
+</body>
+
+</html>

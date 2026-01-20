@@ -491,6 +491,50 @@ Respond naturally as Jephthah (keep it short, 1-3 sentences, be real):"""
     async def share_win(self, win: str):
         """Share a win"""
         await self.send(f"🔥 W!\n\n{win}")
+    
+    async def send_job_applied(self, job: Dict, app_number: int = 0):
+        """Send detailed notification when a job is applied"""
+        msg = f"""🎯 **JOB APPLIED** #{app_number if app_number else ''}
+
+📌 **Title**: {job.get('title', 'Unknown')[:60]}
+🏢 **Company**: {job.get('company', 'Unknown Company')}
+📍 **Location**: {job.get('location', 'Remote')}
+💰 **Salary**: {job.get('salary', 'Not specified')}
+🌐 **Source**: {job.get('site', 'Unknown')}
+
+📝 **Description**:
+{job.get('description', 'No description available')[:400]}...
+
+🔗 View: {job.get('url', '#')[:60]}
+
+⏰ {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"""
+        
+        try:
+            await self.send(msg)
+        except Exception as e:
+            logger.error(f"Job notification error: {e}")
+    
+    async def send_email_notification(self, email_type: str, details: Dict):
+        """Notify about email activity"""
+        if email_type == "received":
+            msg = f"""📬 **NEW EMAIL**
+
+From: {details.get('from', 'Unknown')}
+Subject: {details.get('subject', 'No subject')}
+
+Preview: {details.get('body', '')[:200]}..."""
+        elif email_type == "replied":
+            msg = f"""✉️ **EMAIL REPLIED**
+
+To: {details.get('to', 'Unknown')}
+Subject: {details.get('subject', 'No subject')}
+
+Sent at: {datetime.utcnow().strftime('%H:%M')} UTC"""
+        else:
+            msg = f"📧 Email activity: {email_type}"
+        
+        await self.send(msg)
 
 
 bestie = TelegramBestie()
+
