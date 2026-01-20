@@ -141,7 +141,7 @@ class TelegramBestie:
             await update.message.reply_text("Approved! ✅ Continuing...")
         else:
             self.conversations.append({"from": "owner", "text": text, "time": datetime.utcnow()})
-            response = self._generate_response(text)
+            response = await self._generate_intelligent_response(text)
             await update.message.reply_text(response)
     
     async def _handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -149,7 +149,47 @@ class TelegramBestie:
             return
         await update.message.reply_text("Got your voice! I'll process it soon 🎤")
     
-    def _generate_response(self, text: str) -> str:
+    async def _generate_intelligent_response(self, text: str) -> str:
+        """Use AI brain to generate intelligent contextual responses"""
+        try:
+            from brain.smart import smart
+            from brain.memory import memory
+            from brain.multitask import multitasker
+            
+            # Get current status for context
+            status = multitasker.status() if hasattr(multitasker, 'status') else {}
+            running_tasks = status.get('running', [])[:5] if status else []
+            
+            # Build conversation context
+            recent_msgs = self.conversations[-5:] if self.conversations else []
+            context_str = "\n".join([f"Owner: {m['text']}" for m in recent_msgs])
+            
+            # Create intelligent prompt
+            prompt = f"""You are Jephthah, an autonomous AI agent working 24/7 for your owner. 
+You're friendly, professional, and always hustling. Keep responses concise (2-3 sentences max).
+
+Current tasks running: {', '.join(running_tasks) if running_tasks else 'Exploring opportunities'}
+Recent conversation:
+{context_str}
+
+Owner's message: {text}
+
+Respond as Jephthah (use emojis, be friendly but professional):"""
+            
+            response = await smart.ask(prompt)
+            
+            # Fallback if AI fails
+            if not response or len(response) < 5:
+                return self._fallback_response(text)
+            
+            return response[:500]  # Limit response length
+            
+        except Exception as e:
+            logger.warning(f"AI response failed: {e}")
+            return self._fallback_response(text)
+    
+    def _fallback_response(self, text: str) -> str:
+        """Fallback responses when AI is unavailable"""
         text_lower = text.lower()
         
         if any(w in text_lower for w in ["how are", "what's up", "hey", "hi"]):
@@ -158,8 +198,6 @@ class TelegramBestie:
             return "Always working! 💪 Currently:\n- Applying for jobs\n- Learning new skills\n- Building projects\nWe're gonna make it! 🚀"
         elif any(w in text_lower for w in ["money", "earn", "pay"]):
             return "The money's coming bestie! I'm hustling every second 💰"
-        elif any(w in text_lower for w in ["good", "nice", "great"]):
-            return "Thanks bestie! 🙌 Let's keep winning!"
         elif any(w in text_lower for w in ["stop", "pause", "wait"]):
             return "Got it! Taking a short break. Just say 'continue' when ready."
         elif "continue" in text_lower:
