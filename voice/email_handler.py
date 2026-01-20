@@ -142,6 +142,58 @@ class EmailClient:
         logger.info(f"Bulk email complete: {sent} sent, {failed} failed")
         return sent
     
+    async def send_email_with_attachment(self, to_email: str, subject: str, body: str, 
+                                         attachment_path: str) -> bool:
+        """Send email with file attachment (PDF, HTML, etc)"""
+        if not self.password:
+            logger.warning("Email password not set")
+            return False
+        
+        try:
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.mime.base import MIMEBase
+            from email import encoders
+            from pathlib import Path
+            
+            # Create multipart message
+            msg = MIMEMultipart()
+            msg["From"] = self.email
+            msg["To"] = to_email
+            msg["Subject"] = subject
+            
+            # Attach body
+            msg.attach(MIMEText(body, "plain"))
+            
+            # Attach file
+            file_path = Path(attachment_path)
+            if file_path.exists():
+                with open(file_path, "rb") as f:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(f.read())
+                encoders.encode_base64(part)
+                part.add_header(
+                    "Content-Disposition",
+                    f"attachment; filename={file_path.name}"
+                )
+                msg.attach(part)
+            
+            # Send
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            
+            with smtplib.SMTP_SSL(self.smtp_server, 465, context=context, timeout=30) as server:
+                server.login(self.email, self.password)
+                server.sendmail(self.email, to_email, msg.as_string())
+            
+            logger.info(f"📎 Email with attachment sent to: {to_email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Email with attachment error: {e}")
+            return False
+    
     async def get_inbox(self, limit: int = 20, unread_only: bool = False) -> List[Dict]:
         """Get inbox emails with retry logic"""
         if not self.password:

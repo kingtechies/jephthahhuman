@@ -65,7 +65,7 @@ class InvoiceGenerator:
         with open(self.invoices_db, 'w') as f:
             json.dump(self.invoices, f, indent=2)
     
-    def create_invoice(
+    async def create_invoice(
         self,
         client_name: str,
         client_email: str,
@@ -74,7 +74,7 @@ class InvoiceGenerator:
         currency: str = "USD",
         due_days: int = 7
     ) -> Dict:
-        """Create a professional invoice"""
+        """Create a professional invoice and email to client"""
         
         invoice_id = f"INV-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
         created_at = datetime.utcnow()
@@ -99,11 +99,18 @@ class InvoiceGenerator:
         html_path = self._generate_html(invoice)
         invoice["html_path"] = str(html_path)
         
+        # Generate PDF from HTML
+        pdf_path = self._generate_pdf(html_path, invoice["id"])
+        invoice["pdf_path"] = str(pdf_path) if pdf_path else None
+        
         # Store invoice
         self.invoices[invoice_id] = invoice
         self._save_invoices()
         
-        logger.info(f"📄 Invoice created: {invoice_id} for {client_name} - {currency} {amount}")
+        # Auto-email invoice to client
+        await self._send_invoice_email(invoice, pdf_path or html_path)
+        
+        logger.info(f"📄 Invoice created and emailed: {invoice_id} for {client_name} - {currency} {amount}")
         return invoice
     
     def _generate_html(self, invoice: Dict) -> Path:
@@ -235,6 +242,101 @@ class InvoiceGenerator:
         filepath = self.invoices_dir / f"{invoice['id']}.html"
         filepath.write_text(html)
         return filepath
+    
+    def _generate_pdf(self, html_path: Path, invoice_id: str) -> Optional[Path]:
+        """Convert HTML invoice to PDF"""
+        try:
+            from weasyprint import HTML
+            pdf_path = self.invoices_dir / f"{invoice_id}.pdf"
+            HTML(filename=str(html_path)).write_pdf(str(pdf_path))
+            logger.info(f"📄 PDF generated: {pdf_path}")
+            return pdf_path
+        except ImportError:
+            logger.warning("weasyprint not installed, falling back to HTML only")
+            return None
+        except Exception as e:
+            logger.error(f"PDF generation error: {e}")
+            return None
+    
+    async def _send_invoice_email(self, invoice: Dict, attachment_path: Path):
+        """Send invoice to client via email"""
+        try:
+            from voice.email_handler import email_client
+            from voice.bestie import bestie
+            
+            client_email = invoice["client_email"]
+            client_name = invoice["client_name"]
+            invoice_id = invoice["id"]
+            amount = invoice["amount"]
+            currency = invoice["currency"]
+            description = invoice["description"]
+            due_date = invoice["due_date"][:10]
+            
+            # Professional email body
+            subject = f"Invoice {invoice_id} - {description}"
+            
+            body = f"""Dear {client_name},
+
+Please find attached your invoice for the following service:
+
+📄 Invoice: {invoice_id}
+📝 Description: {description}
+💰 Amount Due: {currency} {amount:,.2f}
+📅 Due Date: {due_date}
+
+Payment Methods:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏦 USD Bank Transfer:
+   Bank: Lead Bank
+   Account Holder: Jephthah Gift Ameh
+   Account Number: 21832066130
+   ACH Routing: 101019644
+
+🇳🇬 Nigerian Naira (NGN):
+   Bank: Moniepoint
+   Account Name: Jephthah Ameh
+   Account Number: 9017599903
+
+₿ Cryptocurrency:
+   BTC: bc1qpuucy0rz2qxqwc2quhva2gznmdkn9hfur75re9
+   ETH: 0xE7648CAd951e53FbCB6D29adCaf27eA946cC9B24
+   SOL: CLJmYam1vqnUXVYpQfadkhkMS3bamGYVGWNrwdY2UsJC
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Once payment is made, please reply to this email with proof of payment.
+
+Thank you for your business!
+
+Best regards,
+Jephthah Ameh
+Full-Stack Developer
+jephthahameh.cfd
+hireme@jephthahameh.cfd"""
+            
+            # Send email with attachment
+            success = await email_client.send_email_with_attachment(
+                to_email=client_email,
+                subject=subject,
+                body=body,
+                attachment_path=str(attachment_path)
+            )
+            
+            if success:
+                logger.info(f"✉️ Invoice emailed to {client_email}")
+                # Notify owner on Telegram
+                await bestie.send(
+                    f"📄 **Invoice Sent**\n\n"
+                    f"To: {client_name} ({client_email})\n"
+                    f"Amount: {currency} {amount:,.2f}\n"
+                    f"ID: {invoice_id}"
+                )
+            else:
+                logger.error(f"Failed to email invoice to {client_email}")
+                
+        except Exception as e:
+            logger.error(f"Invoice email error: {e}")
     
     def get_invoice(self, invoice_id: str) -> Optional[Dict]:
         return self.invoices.get(invoice_id)
