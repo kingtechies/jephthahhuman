@@ -195,13 +195,13 @@ class Jephthah:
                     subject = em.get("subject", "").lower()
                     
                     if any(w in subject for w in ["interview", "opportunity", "job", "offer"]):
-                        await bestie.send(f"Important email: {em.get('subject', '')}")
+                        await bestie.send(f"📧 Important email: {em.get('subject', '')}")
                         
                         reply = await smart.write_email(f"Respond to: {em.get('body', '')[:500]}")
                         await email_client.reply(em, reply)
             except:
                 pass
-            await asyncio.sleep(600)
+            await asyncio.sleep(30)  # Check every 30 seconds for INSTANT replies!
     
     async def _evolve_daily(self):
         while self.running:
