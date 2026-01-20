@@ -199,8 +199,12 @@ class Jephthah:
                         
                         reply = await smart.write_email(f"Respond to: {em.get('body', '')[:500]}")
                         await email_client.reply(em, reply)
-            except:
-                pass
+                        logger.info(f"Replied to email: {em.get('subject', '')[:50]}")
+            except Exception as e:
+                logger.error(f"Email check error: {e}")
+                # Try to notify about email system issues
+                if "password" in str(e).lower() or "auth" in str(e).lower():
+                    await bestie.send(f"⚠️ Email system error: Check email password in jeph.env")
             await asyncio.sleep(30)  # Check every 30 seconds for INSTANT replies!
     
     async def _evolve_daily(self):
