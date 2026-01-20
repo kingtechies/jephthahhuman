@@ -36,6 +36,7 @@ from infra.network import rate_limiter
 from money.crm import crm, finance
 from money.growth import growth, portfolio
 from voice.whatsapp import whatsapp
+from income.freelancing import freelancer
 from eyes.ocr import ocr
 from infra.self_host_tools import tools_deployer
 from income.content_real import content_studio
@@ -78,6 +79,8 @@ class Jephthah:
         asyncio.create_task(self._check_emails())
         asyncio.create_task(self._evolve_daily())
         asyncio.create_task(self._hunt_memes())
+        asyncio.create_task(self._send_cold_emails())
+        asyncio.create_task(self._freelance_hustle())
         
         logger.info("ALL SYSTEMS 100% OPERATIONAL")
     
@@ -191,6 +194,47 @@ class Jephthah:
             # Check every 30 mins
             await asyncio.sleep(1800)
     
+    async def _send_cold_emails(self):
+        """Dedicated loop for cold email outreach"""
+        while self.running:
+            try:
+                # AI generates personalized cold emails
+                subject = await smart.ask("Write a short, catchy subject line for a cold email offering Python, AI, and web development services")
+                body = await smart.ask("Write a short, professional cold email offering my services as a Python developer, AI specialist, and web developer. Keep it under 150 words. I am Jephthah Ameh.")
+                
+                # Send to any leads from CRM
+                leads = crm.get_all_leads(status="new")[:5]
+                for lead in leads:
+                    if lead.get("email"):
+                        await cold_mailer.send_cold_email(lead["email"], subject[:100], body)
+                        crm.update_lead(lead["id"], status="contacted")
+                
+                sent = cold_mailer.sent_count
+                if sent > 0:
+                    await bestie.send(f"📧 Cold outreach: {sent} emails sent today!")
+            except Exception as e:
+                logger.error(f"Cold email error: {e}")
+            await asyncio.sleep(3600)  # Every hour
+    
+    async def _freelance_hustle(self):
+        """Dedicated loop for Upwork/Fiverr applications"""
+        while self.running:
+            try:
+                # Login if needed
+                if not freelancer.platforms.get("upwork", {}).get("logged_in"):
+                    await freelancer.login_upwork()
+                
+                # Apply to jobs
+                applied = await freelancer.daily_applications(target=50)
+                if applied > 0:
+                    await bestie.send(f"💼 Freelancing: Applied to {applied} jobs on Upwork!")
+                
+                # Check for client messages
+                await freelancer.check_messages("upwork")
+            except Exception as e:
+                logger.error(f"Freelancing error: {e}")
+            await asyncio.sleep(1800)  # Every 30 mins
+    
     async def _handle_error(self, error: str):
         logger.error(f"Error: {error}")
         await self_learner.learn_from_error(error)
@@ -284,11 +328,11 @@ class Jephthah:
     async def run_forever(self):
         await self.wake_up()
         
-        if datetime.utcnow().hour == 0:
-            asyncio.create_task(self.register_everywhere())
-            asyncio.create_task(self.create_and_publish())
-            asyncio.create_task(tools_deployer.deploy_tts_server(config.infra.vps_ip or "127.0.0.1"))
-            asyncio.create_task(tools_deployer.deploy_invoice_generator(config.infra.vps_ip or "127.0.0.1"))
+        # Run registration and content creation at startup
+        asyncio.create_task(self.register_everywhere())
+        asyncio.create_task(self.create_and_publish())
+        asyncio.create_task(tools_deployer.deploy_tts_server(config.infra.vps_ip or "127.0.0.1"))
+        asyncio.create_task(tools_deployer.deploy_invoice_generator(config.infra.vps_ip or "127.0.0.1"))
             
         asyncio.create_task(self._monitor_whatsapp())
         
