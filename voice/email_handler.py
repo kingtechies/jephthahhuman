@@ -15,9 +15,9 @@ class EmailClient:
     def __init__(self):
         self.email = config.identity.email
         self.password = config.identity.email_password
-        self.smtp_server = "mail.jephthahameh.cfd"
-        self.smtp_port = 587
-        self.imap_server = "mail.jephthahameh.cfd"
+        self.smtp_server = "smtp.hostinger.com"
+        self.smtp_port = 465
+        self.imap_server = "imap.hostinger.com"
         self.imap_port = 993
         
     async def send_email(self, to: str, subject: str, body: str, html: bool = False) -> bool:
