@@ -214,11 +214,11 @@ Respond with a short update (1-2 sentences) about what you're doing/did.""")
             logger.error(f"Task execution error: {e}")
     
     async def _handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle voice messages - transcribe and respond with voice"""
+        """Handle voice messages - transcribe and respond with ONLY voice"""
         if str(update.effective_user.id) != str(self.owner_id) and self.owner_id:
             return
         
-        await update.message.reply_text("🎤 Got it, listening...")
+        await update.message.reply_text("🎤 Listening...")
         
         try:
             # Download voice file
@@ -226,31 +226,28 @@ Respond with a short update (1-2 sentences) about what you're doing/did.""")
             voice_path = f"/tmp/voice_{datetime.utcnow().timestamp()}.ogg"
             await voice_file.download_to_drive(voice_path)
             
-            # Transcribe using OpenAI Whisper
+            # Transcribe using free Google Speech Recognition
             transcribed_text = await self._transcribe_audio(voice_path)
             
             if transcribed_text:
                 # Add to conversation and generate response
                 self.conversations.append({"from": "owner", "text": transcribed_text, "time": datetime.utcnow()})
                 
-                # Show what was heard
-                await update.message.reply_text(f"Heard: {transcribed_text}")
-                
-                # Generate text response
+                # Generate response
                 response = await self._generate_response(transcribed_text)
                 
-                # Send text response
-                await update.message.reply_text(response)
-                
-                # Generate and send voice response
+                # ONLY send voice response (not text)
                 voice_response_path = await self._text_to_speech(response)
                 if voice_response_path:
                     with open(voice_response_path, 'rb') as audio:
                         await update.message.reply_voice(voice=audio)
                     import os
                     os.remove(voice_response_path)
+                else:
+                    # Fallback to text if voice fails
+                    await update.message.reply_text(response)
             else:
-                await update.message.reply_text("Couldn't catch that clearly. Mind sending as text?")
+                await update.message.reply_text("Couldn't catch that. Try again or send text!")
             
             # Cleanup
             import os
@@ -259,21 +256,42 @@ Respond with a short update (1-2 sentences) about what you're doing/did.""")
                 
         except Exception as e:
             logger.error(f"Voice handling error: {e}")
-            await update.message.reply_text("Voice processing hit a snag. Send it as text for now!")
+            await update.message.reply_text("Voice issue. Send text for now!")
     
     async def _transcribe_audio(self, audio_path: str) -> Optional[str]:
-        """Transcribe audio using OpenAI Whisper"""
+        """Transcribe audio using FREE Google Speech Recognition"""
         try:
-            import openai
+            import speech_recognition as sr
+            from pydub import AudioSegment
+            import os
             
-            client = openai.OpenAI(api_key=config.ai.openai_api_key)
+            # Convert OGG to WAV (speech_recognition needs WAV)
+            wav_path = audio_path.replace('.ogg', '.wav')
+            audio = AudioSegment.from_ogg(audio_path)
+            audio.export(wav_path, format="wav")
             
-            with open(audio_path, 'rb') as audio_file:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file
-                )
-            return transcript.text
+            # Use Google's free speech recognition
+            recognizer = sr.Recognizer()
+            
+            with sr.AudioFile(wav_path) as source:
+                audio_data = recognizer.record(source)
+            
+            # Free Google Speech Recognition - no API key needed
+            text = recognizer.recognize_google(audio_data)
+            
+            # Cleanup
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
+            
+            logger.info(f"Transcribed: {text[:50]}...")
+            return text
+            
+        except sr.UnknownValueError:
+            logger.warning("Speech not understood")
+            return None
+        except sr.RequestError as e:
+            logger.error(f"Speech recognition service error: {e}")
+            return None
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return None
