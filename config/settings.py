@@ -33,6 +33,7 @@ class JephthahIdentity(BaseModel):
     name: str = "Jephthah"
     email: str = os.getenv("JEPHTHAH_EMAIL", "hireme@jephthahameh.cfd")
     email_password: Optional[str] = os.getenv("JEPHTHAH_EMAIL_PASSWORD")
+    website: str = os.getenv("JEPHTHAH_WEBSITE", "https://jephthahameh.cfd")
 
 
 class AIConfig(BaseModel):

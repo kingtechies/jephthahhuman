@@ -17,7 +17,7 @@ class TelegramBestie:
     def __init__(self):
         self.bot = None
         self.app = None
-        self.owner_id = config.communication.owner_telegram_id
+        self.owner_id = config.owner.telegram_id
         self.token = config.communication.telegram_bot_token
         self.pending_requests = []
         self.conversations = []
