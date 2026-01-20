@@ -187,25 +187,64 @@ class Jephthah:
             await asyncio.sleep(3600)
     
     async def _check_emails(self):
+        """Reply to ALL emails - no exclusions"""
         while self.running:
             try:
-                emails = await email_client.get_inbox(unread_only=True)
+                # Get ALL emails (not just unread) to ensure nothing is missed
+                emails = await email_client.get_inbox(limit=20, unread_only=False)
+                
+                # Track which we've already processed
+                processed_ids = getattr(self, '_processed_email_ids', set())
                 
                 for em in emails:
-                    subject = em.get("subject", "").lower()
+                    email_id = em.get("id", "")
+                    subject = em.get("subject", "")
+                    sender = em.get("from", "")
+                    body = em.get("body", "")[:1000]
                     
-                    if any(w in subject for w in ["interview", "opportunity", "job", "offer"]):
-                        await bestie.send(f"📧 Important email: {em.get('subject', '')}")
-                        
-                        reply = await smart.write_email(f"Respond to: {em.get('body', '')[:500]}")
-                        await email_client.reply(em, reply)
-                        logger.info(f"Replied to email: {em.get('subject', '')[:50]}")
+                    # Skip if already processed or from ourselves
+                    if email_id in processed_ids:
+                        continue
+                    if "jephthahameh.cfd" in sender.lower():
+                        continue  # Don't reply to our own emails
+                    if not sender or not body.strip():
+                        continue
+                    
+                    # Notify about incoming email
+                    is_priority = any(w in subject.lower() for w in ["interview", "opportunity", "job", "offer", "urgent"])
+                    emoji = "🔥" if is_priority else "📧"
+                    await bestie.send(f"{emoji} Email from {sender[:30]}: {subject[:50]}")
+                    
+                    # Generate intelligent reply using AI
+                    prompt = f"""Reply professionally to this email:
+From: {sender}
+Subject: {subject}
+Body: {body[:500]}
+
+I am Jephthah Ameh, a full-stack developer. Be helpful, professional, and concise."""
+                    
+                    reply = await smart.ask(prompt)
+                    if reply:
+                        success = await email_client.reply(em, reply)
+                        if success:
+                            logger.info(f"✅ Replied to: {subject[:50]}")
+                            await bestie.send(f"✅ Replied to email: {subject[:50]}")
+                            processed_ids.add(email_id)
+                            await email_client.mark_read(email_id)
+                        else:
+                            logger.warning(f"Failed to reply to: {subject[:50]}")
+                    
+                    # Small delay between replies to avoid spam detection
+                    await asyncio.sleep(5)
+                
+                self._processed_email_ids = processed_ids
+                
             except Exception as e:
                 logger.error(f"Email check error: {e}")
-                # Try to notify about email system issues
                 if "password" in str(e).lower() or "auth" in str(e).lower():
-                    await bestie.send(f"⚠️ Email system error: Check email password in jeph.env")
-            await asyncio.sleep(30)  # Check every 30 seconds for INSTANT replies!
+                    await bestie.send(f"⚠️ Email system error: Check password")
+            
+            await asyncio.sleep(60)  # Check every minute
     
     async def _evolve_daily(self):
         while self.running:
