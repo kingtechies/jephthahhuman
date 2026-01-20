@@ -1,0 +1,50 @@
+# Secrets - NEVER push these
+config/jeph.env
+*.env
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+
+# Data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Browser state
+browser_state/
+
+# Temporary
+*.tmp
+*.temp
+.cache/
+
+# Playwright
+playwright-report/
+test-results/
