@@ -691,6 +691,43 @@ hireme@jephthahameh.cfd"""
             logger.info(f"Payment verification sent for {invoice_id}")
         except Exception as e:
             logger.error(f"Payment verification send error: {e}")
+    
+    async def send_invoice_request_alert(self, client_name: str, client_email: str, 
+                                         message_preview: str, subject: str):
+        """Alert owner when client requests invoice/payment info"""
+        if not self.bot or not self.owner_id:
+            return
+        
+        # Create button to initiate invoice creation
+        keyboard = [
+            [
+                InlineKeyboardButton("📄 Create Invoice", callback_data=f"create_inv_{client_email[:30]}"),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        msg = f"""💰 **INVOICE REQUEST DETECTED**
+
+👤 Client: {client_name}
+📧 Email: {client_email}
+📌 Subject: {subject[:50]}
+
+📝 Message Preview:
+{message_preview[:200]}...
+
+I've asked them for project details. When they reply, you can create an invoice with:
+`/invoice {client_email} [amount] [description]`"""
+        
+        try:
+            await self.bot.send_message(
+                chat_id=self.owner_id,
+                text=msg,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            logger.info(f"Invoice request alert sent for {client_name}")
+        except Exception as e:
+            logger.error(f"Invoice request alert error: {e}")
 
 
 bestie = TelegramBestie()

@@ -229,6 +229,56 @@ class Jephthah:
                     emoji = "🔥" if is_priority else "📧"
                     await bestie.send(f"{emoji} Email from {sender_name}: {subject[:50]}")
                     
+                    # Check for INVOICE/PAYMENT request keywords
+                    payment_keywords = ["invoice", "payment", "pay you", "send invoice", "how do i pay", 
+                                       "ready to pay", "want to pay", "payment details", "bank details",
+                                       "crypto payment", "wire transfer", "billing", "pricing", "quote",
+                                       "cost", "how much", "rate", "budget"]
+                    body_lower = body.lower()
+                    subject_lower = subject.lower()
+                    
+                    is_payment_request = any(kw in body_lower or kw in subject_lower for kw in payment_keywords)
+                    
+                    if is_payment_request:
+                        # This might be someone wanting to pay! Handle specially
+                        logger.info(f"💰 Payment/Invoice request detected from {sender_name}")
+                        
+                        # Ask for project details
+                        invoice_reply = f"""Hi {sender_name},
+
+Thank you for reaching out about payment!
+
+To send you an invoice, I need a few details:
+
+1. **Project/Service:** What service or project is this payment for?
+2. **Amount:** What amount did we agree on? (USD or NGN)
+3. **Any special notes?**
+
+Once you reply with these details, I'll send you a professional invoice with all payment options (Bank Transfer, Crypto, etc).
+
+Looking forward to working with you!
+
+Best regards,
+Jephthah Ameh
+Full-Stack Developer
+hireme@jephthahameh.cfd"""
+
+                        await email_client.reply(em, invoice_reply)
+                        replied_ids.add(email_id)
+                        with open(replied_file, 'w') as f:
+                            json.dump(list(replied_ids), f)
+                        
+                        # Alert owner with CREATE INVOICE button
+                        await bestie.send_invoice_request_alert(
+                            client_name=sender_name,
+                            client_email=sender,
+                            message_preview=body[:300],
+                            subject=subject
+                        )
+                        
+                        await email_client.mark_read(email_id)
+                        continue  # Skip normal reply
+                    
                     # Generate REAL reply - no placeholders
                     prompt = f"""Write a professional email reply. Be specific and human - NO placeholders like [NAME] or [COMPANY].
 
