@@ -51,26 +51,40 @@ class EmailClient:
         self.smtp_port = 587
         self.imap_server = "mail.jephthahameh.cfd"
         self.imap_port = 993
-        self.timeout = 15  # Connection timeout in seconds
+        self.timeout = 30  # Increased timeout
         self._last_connection_check = None
         
     def _create_ssl_context(self) -> ssl.SSLContext:
-        """Create SSL context for secure connections"""
+        """Create SSL context - lenient for self-signed certs"""
         context = ssl.create_default_context()
+        # Allow self-signed certificates (common for mail servers)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
         return context
     
     @retry_sync(max_retries=3, base_delay=2.0)
     def _connect_smtp(self) -> smtplib.SMTP:
         """Connect to SMTP server with retry"""
         server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=self.timeout)
+        server.ehlo()
         server.starttls(context=self._create_ssl_context())
+        server.ehlo()
         server.login(self.email, self.password)
         return server
     
     @retry_sync(max_retries=3, base_delay=2.0)
     def _connect_imap(self) -> imaplib.IMAP4_SSL:
         """Connect to IMAP server with retry"""
-        mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port, ssl_context=self._create_ssl_context())
+        # Set socket timeout globally for IMAP
+        import socket
+        socket.setdefaulttimeout(self.timeout)
+        
+        mail = imaplib.IMAP4_SSL(
+            self.imap_server, 
+            self.imap_port, 
+            ssl_context=self._create_ssl_context(),
+            timeout=self.timeout
+        )
         mail.login(self.email, self.password)
         return mail
     
