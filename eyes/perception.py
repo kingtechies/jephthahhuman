@@ -189,27 +189,71 @@ DETECTED:
         return description
     
     async def find_and_click(self, target: str) -> bool:
-        """Find something by description and click it"""
-        # Try different selectors
+        """Find something by description and click it - with smart detection"""
+        target_lower = target.lower()
+        
+        # Try different selectors - ordered by reliability
         selectors = [
-            f"text={target}",
+            # Exact text matches
             f'button:has-text("{target}")',
             f'a:has-text("{target}")',
-            f'[aria-label*="{target}"]',
-            f'input[value*="{target}"]',
+            f'input[type="submit"][value*="{target}" i]',
+            f'input[type="button"][value*="{target}" i]',
+            # Partial/flexible matches  
+            f'[role="button"]:has-text("{target}")',
+            f'[aria-label*="{target}" i]',
+            f'[title*="{target}" i]',
+            # Common button classes
+            f'.btn:has-text("{target}")',
+            f'.button:has-text("{target}")',
+            # Data attributes
+            f'[data-action*="{target_lower}"]',
+            f'[data-testid*="{target_lower}"]',
+            # Spans inside buttons (common pattern)
+            f'button span:has-text("{target}")',
+            f'a span:has-text("{target}")',
+            # Generic text selector last
+            f"text={target}",
+            f'text="{target}"',
         ]
         
         for selector in selectors:
             try:
-                element = await browser.wait_for_selector(selector, timeout=2000)
+                # Wait longer and check visibility
+                element = await browser.wait_for_selector(selector, timeout=5000)
                 if element:
-                    await browser.click_like_human(selector)
-                    logger.info(f"Clicked: {target}")
-                    return True
-            except:
+                    # Check if visible
+                    is_visible = await element.is_visible()
+                    if is_visible:
+                        await browser.click_like_human(selector)
+                        logger.info(f"✓ Clicked: {target}")
+                        return True
+            except Exception:
                 continue
         
-        logger.warning(f"Could not find: {target}")
+        # Last resort: try JavaScript to find by text content
+        try:
+            clicked = await browser.page.evaluate(f'''
+                () => {{
+                    const target = "{target}".toLowerCase();
+                    const elements = Array.from(document.querySelectorAll('button, a, input[type="submit"], [role="button"]'));
+                    for (const el of elements) {{
+                        const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').toLowerCase();
+                        if (text.includes(target)) {{
+                            el.click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            ''')
+            if clicked:
+                logger.info(f"✓ JS-Clicked: {target}")
+                return True
+        except Exception:
+            pass
+        
+        logger.debug(f"Could not find clickable: {target}")
         return False
     
     async def find_and_type(self, field_hint: str, text: str) -> bool:
