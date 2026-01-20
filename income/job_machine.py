@@ -238,31 +238,75 @@ class JobMachine:
                 # Check if there's a form
                 understanding = await perception.read_and_understand()
                 if understanding.get("has_form"):
-                    await self._fill_application()
+                    # Generate and upload job-specific resume
+                    resume_path = await self._generate_resume(job)
+                    if resume_path:
+                        await self._upload_resume(resume_path)
+                    
+                    # Fill application form
+                    await self._fill_application(job)
                 
                 # Try to submit
-                for submit_text in ["Submit", "Apply", "Send", "Submit Application", "Complete"]:
-                    await browser.click_text_safe(submit_text)
+                submitted = False
+                for submit_text in ["Submit", "Apply", "Send", "Submit Application", "Complete", "Confirm"]:
+                    if await browser.click_text_safe(submit_text):
+                        submitted = True
+                        break
                 
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
                 
-                # Record application
-                application = {
-                    **job,
-                    "applied_at": datetime.utcnow().isoformat(),
-                    "status": "applied"
-                }
-                self.applications_history.append(application)
-                self.applied_count += 1
-                self._save_history()
+                # VERIFY SUCCESS - Check if actually applied
+                page_text = await browser.get_page_text()
+                page_text_lower = page_text.lower()
                 
-                logger.info(f"✅ Applied #{self.applied_count}: {job.get('title', '')[:50]} at {job.get('company', 'Unknown')}")
+                success_indicators = [
+                    "thank you for applying",
+                    "application submitted",
+                    "successfully applied",
+                    "application received",
+                    "we received your application",
+                    "application complete",
+                    "thanks for your interest",
+                    "you have applied",
+                    "application sent",
+                    "good luck",
+                    "we'll be in touch",
+                    "we will review",
+                    "confirmation",
+                ]
                 
-                # Send Telegram notification
-                if notify:
-                    await self._notify_application(application)
+                is_success = any(indicator in page_text_lower for indicator in success_indicators)
                 
-                return True
+                if is_success:
+                    # Record SUCCESSFUL application
+                    application = {
+                        **job,
+                        "applied_at": datetime.utcnow().isoformat(),
+                        "status": "success",
+                        "verified": True
+                    }
+                    self.applications_history.append(application)
+                    self.applied_count += 1
+                    self._save_history()
+                    
+                    logger.info(f"✅ VERIFIED Applied #{self.applied_count}: {job.get('title', '')[:50]} at {job.get('company', 'Unknown')}")
+                    
+                    # Send Telegram notification
+                    if notify:
+                        await self._notify_application(application)
+                    
+                    return True
+                else:
+                    # Record as attempt only
+                    attempt_record = {
+                        **job,
+                        "attempted_at": datetime.utcnow().isoformat(),
+                        "status": "attempted",
+                        "verified": False
+                    }
+                    logger.warning(f"⚠️ Application attempted but not verified: {job.get('title', '')[:50]}")
+                    # Don't count as applied, just log it
+                    return False
                 
             except Exception as e:
                 logger.warning(f"Apply attempt {attempt + 1} failed: {e}")
@@ -273,8 +317,8 @@ class JobMachine:
         logger.debug(f"❌ Failed to apply: {job.get('title', '')[:50]}")
         return False
     
-    async def _fill_application(self):
-        """Fill out job application form"""
+    async def _fill_application(self, job: Dict = None):
+        """Fill out job application form with real details"""
         from config.settings import config
         
         fields = [
@@ -283,7 +327,8 @@ class JobMachine:
             ("first", "Jephthah"),
             ("last", "Ameh"),
             ("email", config.identity.email),
-            ("phone", "+2348123456789"),
+            ("phone", "+2349017599903"),
+            ("mobile", "+2349017599903"),
             ("linkedin", "https://linkedin.com/in/jephthah-ameh"),
             ("portfolio", config.identity.website),
             ("website", config.identity.website),
@@ -292,7 +337,9 @@ class JobMachine:
             ("years", "5"),
             ("salary", "100000"),
             ("rate", "75"),
-            ("cover", "I am a passionate software engineer with 5+ years of experience in Python, AI, and web development."),
+            ("location", "Nigeria (Remote)"),
+            ("city", "Lagos"),
+            ("country", "Nigeria"),
         ]
         
         for hint, value in fields:
@@ -311,6 +358,118 @@ class JobMachine:
                     pass
         except:
             pass
+    
+    async def _generate_resume(self, job: Dict) -> Optional[Path]:
+        """Generate job-specific resume/CV, cache by role type"""
+        from brain.smart import smart
+        
+        resumes_dir = DATA_DIR / "resumes"
+        resumes_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Determine role type for caching
+        job_title = job.get("title", "").lower()
+        
+        role_mappings = {
+            "python": "python_developer",
+            "flutter": "flutter_developer",
+            "react": "react_developer",
+            "full stack": "fullstack_developer",
+            "backend": "backend_developer",
+            "frontend": "frontend_developer",
+            "mobile": "mobile_developer",
+            "ai": "ai_engineer",
+            "machine learning": "ml_engineer",
+            "data": "data_engineer",
+            "devops": "devops_engineer",
+            "automation": "automation_engineer",
+        }
+        
+        role_key = "software_developer"  # default
+        for keyword, role in role_mappings.items():
+            if keyword in job_title:
+                role_key = role
+                break
+        
+        # Check if we have cached resume for this role
+        resume_path = resumes_dir / f"resume_{role_key}.pdf"
+        
+        if resume_path.exists():
+            logger.info(f"📄 Using cached resume for {role_key}")
+            return resume_path
+        
+        # Generate new resume tailored to role
+        logger.info(f"📝 Generating new resume for {role_key}...")
+        
+        prompt = f"""Create a professional resume/CV for this role: {job.get('title', 'Software Developer')}
+
+Name: Jephthah Ameh
+Email: hireme@jephthahameh.cfd
+Phone: +2349017599903
+Website: jephthahameh.cfd
+GitHub: github.com/kingtechies
+Location: Nigeria (Remote)
+
+Skills: Python, Flutter, React, AI/ML, Django, FastAPI, PostgreSQL, Docker, AWS
+
+Experience:
+- 5+ years software development
+- Built AI chatbots, mobile apps, web platforms
+- Freelanced on Upwork with high ratings
+- Open source contributor
+
+IMPORTANT: 
+- Write ONLY professional content
+- NO placeholders or brackets
+- NO asterisks or formatting marks
+- Plain text only, professional tone"""
+        
+        resume_content = await smart.ask(prompt)
+        
+        if resume_content and "[" not in resume_content and "*" not in resume_content:
+            # Save as text first
+            txt_path = resumes_dir / f"resume_{role_key}.txt"
+            txt_path.write_text(resume_content)
+            
+            # Try to convert to PDF
+            try:
+                from weasyprint import HTML
+                
+                html_content = f"""<!DOCTYPE html>
+<html><head><style>
+body {{ font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; }}
+h1 {{ color: #2563eb; border-bottom: 2px solid #2563eb; }}
+h2 {{ color: #1e3a5f; }}
+</style></head>
+<body><pre style="white-space: pre-wrap; font-family: inherit;">{resume_content}</pre></body></html>"""
+                
+                HTML(string=html_content).write_pdf(str(resume_path))
+                logger.info(f"✅ Resume generated: {resume_path}")
+                return resume_path
+            except:
+                logger.warning("PDF generation failed, using text file")
+                return txt_path
+        
+        return None
+    
+    async def _upload_resume(self, resume_path: Path):
+        """Upload resume to file input fields"""
+        try:
+            # Find file inputs
+            file_inputs = await browser.page.query_selector_all('input[type="file"]')
+            
+            for file_input in file_inputs[:3]:  # Try first 3 file inputs
+                try:
+                    await file_input.set_input_files(str(resume_path))
+                    logger.info(f"📎 Resume uploaded: {resume_path.name}")
+                    await asyncio.sleep(1)
+                    return True
+                except Exception as e:
+                    logger.debug(f"File upload attempt failed: {e}")
+                    continue
+        except Exception as e:
+            logger.debug(f"Resume upload error: {e}")
+        
+        return False
     
     async def _notify_application(self, job: Dict):
         """Send detailed Telegram notification for job application"""

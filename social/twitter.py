@@ -20,8 +20,10 @@ class TwitterBot:
     """Twitter/X automation for growth and engagement"""
     
     def __init__(self):
-        self.base_url = "https://twitter.com"
+        self.base_url = "https://x.com"
         self.logged_in = False
+        self.daily_posts = 0
+        self.max_daily_posts = 10  # User requested 10 posts per day
         
     async def login(self) -> bool:
         """Login to Twitter"""
@@ -36,7 +38,7 @@ class TwitterBot:
             return False
         
         try:
-            await browser.goto("https://twitter.com/login")
+            await browser.goto("https://x.com/login")
             await asyncio.sleep(2)
             
             # Enter username
@@ -62,7 +64,7 @@ class TwitterBot:
                         username=username,
                         email=config.identity.email,
                         password_key="TWITTER_PASSWORD",
-                        profile_url=f"https://twitter.com/{username}"
+                        profile_url=f"https://x.com/{username}"
                     )
                 
                 return True
@@ -81,7 +83,7 @@ class TwitterBot:
         
         try:
             # Navigate to home
-            await browser.goto("https://twitter.com/home")
+            await browser.goto("https://x.com/home")
             await asyncio.sleep(2)
             
             # Find the compose box
@@ -149,7 +151,7 @@ class TwitterBot:
             return False
         
         try:
-            await browser.goto(f"https://twitter.com/{username}")
+            await browser.goto(f"https://x.com/{username}")
             await asyncio.sleep(2)
             
             # Check if already following
@@ -216,7 +218,7 @@ class TwitterBot:
             return []
         
         try:
-            search_url = f"https://twitter.com/search?q={query}&f=live"
+            search_url = f"https://x.com/search?q={query}&f=live"
             await browser.goto(search_url)
             await asyncio.sleep(3)
             
@@ -245,7 +247,7 @@ class TwitterBot:
         
         try:
             username = config.social.twitter_username
-            await browser.goto(f"https://twitter.com/{username}")
+            await browser.goto(f"https://x.com/{username}")
             await asyncio.sleep(2)
             
             # Try to find follower count

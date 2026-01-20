@@ -224,7 +224,7 @@ class AccountRegistrar:
     
     async def register_twitter(self) -> Dict:
         """Register on Twitter/X"""
-        return await self.register("twitter", "https://twitter.com/i/flow/signup")
+        return await self.register("twitter", "https://x.com/i/flow/signup")
     
     async def register_linkedin(self) -> Dict:
         """Register on LinkedIn"""

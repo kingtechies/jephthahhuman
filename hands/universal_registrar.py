@@ -133,7 +133,7 @@ class UniversalRegistrar:
     
     async def register_all_social(self) -> List[Dict]:
         platforms = {
-            "twitter": "https://twitter.com/i/flow/signup",
+            "twitter": "https://x.com/i/flow/signup",
             "linkedin": "https://www.linkedin.com/signup",
             "facebook": "https://www.facebook.com/r.php",
             "instagram": "https://www.instagram.com/accounts/emailsignup/",

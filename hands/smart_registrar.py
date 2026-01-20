@@ -28,7 +28,7 @@ class SmartRegistrar:
             "substack": {"url": "https://substack.com/signup", "phone": "never"},
             "gumroad": {"url": "https://gumroad.com/signup", "phone": "never"},
             "producthunt": {"url": "https://www.producthunt.com/", "phone": "never"},
-            "twitter": {"url": "https://twitter.com/i/flow/signup", "phone": "required"},
+            "twitter": {"url": "https://x.com/i/flow/signup", "phone": "required"},
             "facebook": {"url": "https://www.facebook.com/r.php", "phone": "required"},
             "instagram": {"url": "https://www.instagram.com/accounts/emailsignup/", "phone": "required"},
             "tiktok": {"url": "https://www.tiktok.com/signup", "phone": "required"},
