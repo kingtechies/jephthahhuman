@@ -81,13 +81,14 @@ class Jephthah:
         asyncio.create_task(self._apply_forever())
         asyncio.create_task(self._post_forever())
         asyncio.create_task(self._watch_news())
-        # asyncio.create_task(self._solve_leetcode())  # DISABLED - User request
         asyncio.create_task(self._trade_crypto())
         asyncio.create_task(self._check_emails())
         asyncio.create_task(self._evolve_daily())
         asyncio.create_task(self._hunt_memes())
         asyncio.create_task(self._send_cold_emails())
         asyncio.create_task(self._freelance_hustle())
+        asyncio.create_task(self._scrape_leads())  # New: Scrape company emails for cold outreach
+        asyncio.create_task(self._join_tech_forums())  # New: Register on all tech forums
         
         logger.info("ALL SYSTEMS 100% OPERATIONAL")
     
@@ -319,6 +320,133 @@ Write a helpful, specific reply addressing their actual message. Keep it under 1
             except Exception as e:
                 logger.error(f"Freelancing error: {e}")
             await asyncio.sleep(1800)  # Every 30 mins
+    
+    async def _scrape_leads(self):
+        """Scrape company emails from job sites and tech directories for cold outreach"""
+        import re
+        lead_sources = [
+            "https://www.ycombinator.com/companies",
+            "https://www.producthunt.com/posts",
+            "https://www.crunchbase.com/lists/startups-hiring",
+            "https://angel.co/companies",
+            "https://github.com/trending",
+            "https://www.indiehackers.com/products",
+            "https://news.ycombinator.com/show",
+        ]
+        
+        email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        
+        while self.running:
+            try:
+                for source in lead_sources:
+                    try:
+                        await browser.goto(source)
+                        await asyncio.sleep(3)
+                        
+                        page_text = await browser.get_page_text()
+                        found_emails = email_pattern.findall(page_text)
+                        
+                        # Filter out common non-business emails
+                        exclude = ['example.com', 'email.com', 'test.com', 'gmail.com', 'yahoo.com', 'hotmail.com']
+                        business_emails = [e for e in found_emails if not any(x in e.lower() for x in exclude)]
+                        
+                        for email in business_emails[:10]:  # Max 10 per source
+                            await crm.add_lead(source=source, contact=email, value=100.0)
+                            logger.info(f"📧 Lead added: {email}")
+                        
+                        # Also scrape company info links
+                        links = await browser.get_all_links()
+                        for link in links[:20]:
+                            href = link.get("href", "")
+                            if "company" in href or "startup" in href or "about" in href:
+                                try:
+                                    await browser.goto(href)
+                                    await asyncio.sleep(2)
+                                    company_text = await browser.get_page_text()
+                                    company_emails = email_pattern.findall(company_text)
+                                    for ce in company_emails[:3]:
+                                        if not any(x in ce.lower() for x in exclude):
+                                            await crm.add_lead(source=href, contact=ce, value=150.0)
+                                except:
+                                    continue
+                    except Exception as e:
+                        logger.debug(f"Lead scrape error for {source}: {e}")
+                        continue
+                
+                leads_count = len(crm.get_leads())
+                if leads_count > 0:
+                    await bestie.send(f"📊 CRM: {leads_count} leads collected for cold outreach!")
+                    
+            except Exception as e:
+                logger.error(f"Lead scraping error: {e}")
+            
+            await asyncio.sleep(7200)  # Every 2 hours
+    
+    async def _join_tech_forums(self):
+        """Register on all major tech forums and communities"""
+        tech_forums = [
+            ("dev.to", "https://dev.to/enter"),
+            ("hashnode", "https://hashnode.com/onboard"),
+            ("hackernoon", "https://hackernoon.com/signup"),
+            ("stackoverflow", "https://stackoverflow.com/users/signup"),
+            ("reddit", "https://www.reddit.com/register/"),
+            ("discord_servers", "https://discord.com/register"),
+            ("producthunt", "https://www.producthunt.com/login"),
+            ("indiehackers", "https://www.indiehackers.com/sign-up"),
+            ("lobsters", "https://lobste.rs/login"),
+            ("slashdot", "https://slashdot.org/my/register"),
+            ("techmeme", "https://www.techmeme.com"),
+            ("dzone", "https://dzone.com/users/login.html"),
+            ("sitepoint", "https://sitepoint.com/community"),
+            ("hackernews", "https://news.ycombinator.com/login"),
+            ("freecodecamp", "https://www.freecodecamp.org/signin"),
+            ("codecademy", "https://www.codecademy.com/register"),
+            ("kaggle", "https://www.kaggle.com/account/login"),
+            ("huggingface", "https://huggingface.co/join"),
+        ]
+        
+        registered_file = Path("data/registered_forums.json")
+        registered_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            if registered_file.exists():
+                with open(registered_file, 'r') as f:
+                    already_registered = set(json.load(f))
+            else:
+                already_registered = set()
+        except:
+            already_registered = set()
+        
+        while self.running:
+            try:
+                for forum_name, forum_url in tech_forums:
+                    if forum_name in already_registered:
+                        continue
+                    
+                    try:
+                        logger.info(f"🌐 Attempting to join: {forum_name}")
+                        
+                        # Use smart registrar
+                        success = await smart_registrar.register(forum_name, forum_url)
+                        
+                        if success:
+                            already_registered.add(forum_name)
+                            with open(registered_file, 'w') as f:
+                                json.dump(list(already_registered), f)
+                            
+                            await bestie.send(f"✅ Registered on: {forum_name}")
+                            logger.info(f"✅ Registered on {forum_name}")
+                        
+                        await asyncio.sleep(60)  # Wait between registrations
+                        
+                    except Exception as e:
+                        logger.debug(f"Forum registration error for {forum_name}: {e}")
+                        continue
+                
+            except Exception as e:
+                logger.error(f"Forum joining error: {e}")
+            
+            await asyncio.sleep(86400)  # Check daily for new forums
     
     async def _handle_error(self, error: str):
         logger.error(f"Error: {error}")
