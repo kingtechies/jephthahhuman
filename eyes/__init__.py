@@ -1,9 +1,9 @@
-from eyes.vision import vision, Vision
-from eyes.perception import perception, Perception
+from eyes.vision import vision, VisionSystem
+from eyes.perception import perception, RealTimePerception
 from eyes.ocr import ocr, OCRReader
 
 __all__ = [
-    "vision", "Vision",
-    "perception", "Perception",
+    "vision", "VisionSystem",
+    "perception", "RealTimePerception",
     "ocr", "OCRReader"
 ]
