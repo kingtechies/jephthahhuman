@@ -230,7 +230,7 @@ class Jephthah:
                 body = await smart.ask("Write a short, professional cold email offering my services as a Python developer, AI specialist, and web developer. Keep it under 150 words. I am Jephthah Ameh.")
                 
                 # Send to any leads from CRM
-                leads = crm.get_all_leads(status="new")[:5]
+                leads = crm.get_leads(status="new", limit=5)
                 for lead in leads:
                     if lead.get("email"):
                         await cold_mailer.send_cold_email(lead["email"], subject[:100], body)

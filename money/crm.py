@@ -88,6 +88,46 @@ class CRMSystem:
                       (json.dumps(history), datetime.utcnow(), client_id))
             conn.commit()
         conn.close()
+    
+    def get_leads(self, status: str = None, limit: int = 100) -> List[Dict]:
+        """Get leads from CRM"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        if status:
+            c.execute("SELECT * FROM leads WHERE status = ? LIMIT ?", (status, limit))
+        else:
+            c.execute("SELECT * FROM leads LIMIT ?", (limit,))
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        result = []
+        for row in rows:
+            lead_dict = dict(row)
+            # Parse contact_info JSON if it exists
+            if lead_dict.get('contact_info'):
+                try:
+                    contact = json.loads(lead_dict['contact_info'])
+                    if isinstance(contact, dict):
+                        lead_dict['email'] = contact.get('email')
+                        lead_dict['name'] = contact.get('name')
+                    else:
+                        lead_dict['email'] = contact
+                except:
+                    lead_dict['email'] = lead_dict['contact_info']
+            result.append(lead_dict)
+        
+        return result
+    
+    def update_lead(self, lead_id: int, status: str):
+        """Update lead status"""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute("UPDATE leads SET status = ? WHERE id = ?", (status, lead_id))
+        conn.commit()
+        conn.close()
 
 class FinanceManager:
     def __init__(self):
