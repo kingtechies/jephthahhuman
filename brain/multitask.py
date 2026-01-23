@@ -203,9 +203,9 @@ class ColdMailer:
         self.templates = {}
         
     async def send_cold_email(self, to_email: str, subject: str, body: str) -> bool:
-        from voice.email_handler import email_handler
+        from voice.email_handler import email_client
         
-        success = await email_handler.send_email(to_email, subject, body)
+        success = await email_client.send_email(to_email, subject, body)
         if success:
             self.sent_count += 1
             logger.info(f"Cold email sent to: {to_email}")
