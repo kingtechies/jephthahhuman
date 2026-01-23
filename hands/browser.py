@@ -197,7 +197,11 @@ class BrowserController:
     async def goto_safe(self, url: str, timeout: int = 30000) -> bool:
         """Navigate with fallback (doesn't raise on failure)"""
         try:
-            return await self.goto(url, timeout=timeout)
+            result = await self.goto(url, timeout=timeout)
+            if result:
+                # Auto-dismiss cookie consent popups
+                await self._dismiss_cookie_consent()
+            return result
         except Exception as e:
             logger.error(f"Safe navigation failed: {e}")
             return False
@@ -524,6 +528,49 @@ class BrowserController:
         """Add human-like random delay"""
         delay = random.randint(min_ms, max_ms) / 1000
         await asyncio.sleep(delay)
+    
+    async def _dismiss_cookie_consent(self):
+        """Auto-dismiss cookie consent popups and modals"""
+        try:
+            # Common cookie consent button selectors
+            consent_selectors = [
+                'button:has-text("Accept")',
+                'button:has-text("Accept All")',
+                'button:has-text("Accept Cookies")',
+                'button:has-text("I Accept")',
+                'button:has-text("OK")',
+                'button:has-text("Allow")',
+                'button:has-text("Allow All")',
+                'button:has-text("Agree")',
+                'button:has-text("Got it")',
+                'button:has-text("Consent")',
+                'button:has-text("Continue")',
+                '[class*="cookie"] button',
+                '[class*="consent"] button',
+                '[id*="cookie"] button',
+                '[id*="consent"] button',
+                '[data-testid*="cookie"] button',
+                '.fc-cta-consent',
+                '#onetrust-accept-btn-handler',
+                '.accept-cookies',
+                '.cookie-accept',
+            ]
+            
+            for selector in consent_selectors:
+                try:
+                    element = await self.page.wait_for_selector(selector, timeout=500)
+                    if element:
+                        is_visible = await element.is_visible()
+                        if is_visible:
+                            await element.click()
+                            logger.debug(f"🍪 Dismissed cookie consent: {selector}")
+                            await asyncio.sleep(0.5)
+                            return
+                except:
+                    continue
+        except Exception as e:
+            # Silently ignore - cookie popup might not exist
+            pass
 
 
 # Global browser instance

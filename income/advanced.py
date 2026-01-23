@@ -16,16 +16,41 @@ class YouTubeCreator:
         self.videos_uploaded = 0
         
     async def create_channel(self, name: str = None) -> bool:
+        """Create YouTube channel - only logs success if VERIFIED"""
         self.channel_name = name or self.channel_name
         await browser.goto("https://www.youtube.com/channel_switcher")
         await asyncio.sleep(2)
-        await perception.find_and_click("Create a channel")
+        
+        # Check if we're logged in first
+        page_text = await browser.get_page_text()
+        if "sign in" in page_text.lower():
+            logger.warning("YouTube: Not logged in, cannot create channel")
+            return False
+        
+        clicked = await perception.find_and_click("Create a channel")
+        if not clicked:
+            logger.warning("YouTube: Could not find 'Create a channel' button")
+            return False
+        
         await asyncio.sleep(2)
-        await perception.find_and_type("name", self.channel_name)
+        typed = await perception.find_and_type("name", self.channel_name)
+        if not typed:
+            logger.warning("YouTube: Could not find name field")
+            return False
+        
         await perception.find_and_click("Create channel")
         await asyncio.sleep(3)
-        logger.info(f"YouTube channel created: {self.channel_name}")
-        return True
+        
+        # VERIFY: Check if channel was actually created
+        page_text = await browser.get_page_text()
+        current_url = await browser.get_current_url()
+        
+        if "studio.youtube" in current_url or "your channel" in page_text.lower() or self.channel_name.lower() in page_text.lower():
+            logger.info(f"✅ VERIFIED: YouTube channel created: {self.channel_name}")
+            return True
+        else:
+            logger.warning(f"❌ YouTube channel creation NOT verified for: {self.channel_name}")
+            return False
     
     async def upload_video(self, video_path: str, title: str, description: str) -> bool:
         await browser.goto("https://studio.youtube.com/channel/upload")
