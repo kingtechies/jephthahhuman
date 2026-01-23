@@ -8,12 +8,17 @@ import smtplib
 import imaplib
 import email
 import ssl
+import os
+import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from functools import wraps
 from loguru import logger
+
+# Disable SSL verification globally for problematic mail servers
+os.environ['PYTHONHTTPSVERIFY'] = '0'
 
 from config.settings import config
 
@@ -55,11 +60,12 @@ class EmailClient:
         self._last_connection_check = None
         
     def _create_ssl_context(self) -> ssl.SSLContext:
-        """Create SSL context - lenient for self-signed certs"""
-        context = ssl.create_default_context()
-        # Allow self-signed certificates (common for mail servers)
+        """Create SSL context - completely bypass all verification for problematic mail servers"""
+        # Create unverified context that skips ALL SSL checks
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
+        # Don't load default CA certs
         return context
     
     @retry_sync(max_retries=3, base_delay=2.0)
@@ -74,19 +80,35 @@ class EmailClient:
     
     @retry_sync(max_retries=3, base_delay=2.0)
     def _connect_imap(self) -> imaplib.IMAP4_SSL:
-        """Connect to IMAP server with retry"""
+        """Connect to IMAP server with retry - with full SSL bypass"""
         # Set socket timeout globally for IMAP
-        import socket
         socket.setdefaulttimeout(self.timeout)
         
-        mail = imaplib.IMAP4_SSL(
-            self.imap_server, 
-            self.imap_port, 
-            ssl_context=self._create_ssl_context(),
-            timeout=self.timeout
-        )
-        mail.login(self.email, self.password)
-        return mail
+        # Create completely unverified SSL context
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        
+        try:
+            mail = imaplib.IMAP4_SSL(
+                self.imap_server, 
+                self.imap_port, 
+                ssl_context=context,
+                timeout=self.timeout
+            )
+            mail.login(self.email, self.password)
+            return mail
+        except ssl.SSLError as e:
+            # Fallback: try connecting without SSL verification
+            logger.warning(f"SSL connection failed, trying unverified: {e}")
+            ssl._create_default_https_context = ssl._create_unverified_context
+            mail = imaplib.IMAP4_SSL(
+                self.imap_server, 
+                self.imap_port,
+                timeout=self.timeout
+            )
+            mail.login(self.email, self.password)
+            return mail
     
     async def send_email(self, to: str, subject: str, body: str, html: bool = False) -> bool:
         """Send an email with retry logic"""

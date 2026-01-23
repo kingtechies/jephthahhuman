@@ -48,6 +48,7 @@ from eyes.ocr import ocr
 from infra.self_host_tools import tools_deployer
 from income.content_real import content_studio
 from income.memecoins import meme_sniper
+from brain.stats_tracker import stats
 
 
 class Jephthah:
@@ -89,6 +90,7 @@ class Jephthah:
         asyncio.create_task(self._freelance_hustle())
         asyncio.create_task(self._scrape_leads())  # New: Scrape company emails for cold outreach
         asyncio.create_task(self._join_tech_forums())  # New: Register on all tech forums
+        asyncio.create_task(self._send_daily_stats())  # Daily stats report to Telegram
         
         logger.info("ALL SYSTEMS 100% OPERATIONAL")
     
@@ -500,11 +502,28 @@ Write a helpful, specific reply addressing their actual message. Keep it under 1
     
     async def _handle_error(self, error: str):
         logger.error(f"Error: {error}")
+        stats.track("errors")
         await self_learner.learn_from_error(error)
         solution = await smart.ask(f"How do I fix: {error[:200]}")
         if solution:
             infinite_brain.learn("error_solution", solution, "openai")
         await bestie.report_problem(error[:100])
+    
+    async def _send_daily_stats(self):
+        """Send stats report to Telegram every 6 hours"""
+        while self.running:
+            try:
+                # Wait 6 hours before first report
+                await asyncio.sleep(21600)  # 6 hours
+                
+                # Generate and send report
+                report = stats.generate_daily_summary()
+                await bestie.send(report)
+                logger.info("📊 Daily stats report sent to Telegram")
+                
+            except Exception as e:
+                logger.error(f"Stats report error: {e}")
+                await asyncio.sleep(3600)  # Wait 1 hour on error
     
     async def register_everywhere(self):
         await smart_registrar.register_email_only()

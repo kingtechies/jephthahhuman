@@ -257,23 +257,89 @@ DETECTED:
         return False
     
     async def find_and_type(self, field_hint: str, text: str) -> bool:
-        """Find an input by hint and type into it"""
+        """Find an input by hint and type into it - with multiple fallback strategies"""
+        field_hint_lower = field_hint.lower()
+        
+        # Comprehensive selectors ordered by specificity
         selectors = [
+            # Direct attribute matches
             f'input[placeholder*="{field_hint}" i]',
             f'input[name*="{field_hint}" i]',
             f'input[id*="{field_hint}" i]',
             f'textarea[placeholder*="{field_hint}" i]',
+            f'textarea[name*="{field_hint}" i]',
+            # Aria labels (accessibility)
+            f'input[aria-label*="{field_hint}" i]',
+            f'textarea[aria-label*="{field_hint}" i]',
+            # Autocomplete hints
+            f'input[autocomplete*="{field_hint}" i]',
+            # Type-based (for common fields)
+            f'input[type="{field_hint}" i]',
+            # Data attributes
+            f'input[data-field*="{field_hint}" i]',
+            f'[data-testid*="{field_hint}" i]',
         ]
         
         for selector in selectors:
             try:
                 element = await browser.wait_for_selector(selector, timeout=2000)
                 if element:
-                    await browser.type_like_human(selector, text)
-                    logger.info(f"Typed into: {field_hint}")
-                    return True
+                    is_visible = await element.is_visible()
+                    if is_visible:
+                        await browser.type_like_human(selector, text)
+                        logger.info(f"Typed into: {field_hint}")
+                        return True
             except:
                 continue
+        
+        # JavaScript fallback - find by associated label text
+        try:
+            typed = await browser.page.evaluate(f'''
+                () => {{
+                    const hint = "{field_hint}".toLowerCase();
+                    // Check labels
+                    const labels = document.querySelectorAll('label');
+                    for (const label of labels) {{
+                        if (label.innerText.toLowerCase().includes(hint)) {{
+                            const forId = label.getAttribute('for');
+                            if (forId) {{
+                                const input = document.getElementById(forId);
+                                if (input && input.offsetParent !== null) {{
+                                    input.focus();
+                                    input.value = "{text}";
+                                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                    return true;
+                                }}
+                            }}
+                            // Check for input inside label
+                            const nestedInput = label.querySelector('input, textarea');
+                            if (nestedInput && nestedInput.offsetParent !== null) {{
+                                nestedInput.focus();
+                                nestedInput.value = "{text}";
+                                nestedInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                return true;
+                            }}
+                        }}
+                    }}
+                    // Check all visible inputs
+                    const inputs = document.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]), textarea');
+                    for (const inp of inputs) {{
+                        const attrs = (inp.placeholder + ' ' + inp.name + ' ' + inp.id + ' ' + (inp.getAttribute('aria-label') || '')).toLowerCase();
+                        if (attrs.includes(hint) && inp.offsetParent !== null) {{
+                            inp.focus();
+                            inp.value = "{text}";
+                            inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            ''')
+            if typed:
+                logger.info(f"JS-Typed into: {field_hint}")
+                return True
+        except Exception as e:
+            logger.debug(f"JS typing failed: {e}")
         
         logger.warning(f"Could not find field: {field_hint}")
         return False

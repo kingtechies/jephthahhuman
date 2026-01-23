@@ -16,6 +16,11 @@ from eyes.perception import perception
 from hands.human import human_behavior, visual_captcha
 from config.settings import DATA_DIR
 
+try:
+    from brain.stats_tracker import stats
+except ImportError:
+    stats = None
+
 
 class JobMachine:
     """Advanced job hunting with retry logic and notifications"""
@@ -288,6 +293,11 @@ class JobMachine:
                     self.applications_history.append(application)
                     self.applied_count += 1
                     self._save_history()
+                    
+                    # Track stats
+                    if stats:
+                        stats.track("jobs_applied")
+                        stats.track("jobs_verified")
                     
                     logger.info(f"✅ VERIFIED Applied #{self.applied_count}: {job.get('title', '')[:50]} at {job.get('company', 'Unknown')}")
                     
