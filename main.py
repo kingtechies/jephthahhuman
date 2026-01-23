@@ -63,13 +63,16 @@ class Jephthah:
     async def wake_up(self):
         logger.info("AWAKENING - I AM JEPHTHAH")
         
-        await browser.initialize(headless=True)
+        await browser.initialize(headless=False)
         logger.info("Eyes online")
         
         if config.communication.telegram_bot_token:
-            await bestie.initialize()
-            await bestie.start()
-            logger.info("Bestie online")
+            try:
+                await bestie.initialize()
+                await bestie.start()
+                logger.info("Bestie online")
+            except Exception as e:
+                logger.error(f"Telegram start failed (continuing without it): {e}")
         
         asyncio.create_task(perception.start_watching())
         
