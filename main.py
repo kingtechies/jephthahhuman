@@ -517,13 +517,27 @@ Write a helpful, specific reply addressing their actual message. Keep it under 1
             await asyncio.sleep(86400)  # Check daily for new forums
     
     async def _handle_error(self, error: str):
-        logger.error(f"Error: {error}")
-        stats.track("errors")
-        await self_learner.learn_from_error(error)
-        solution = await smart.ask(f"How do I fix: {error[:200]}")
-        if solution:
-            infinite_brain.learn("error_solution", solution, "openai")
-        await bestie.report_problem(error[:100])
+        # Filter out benign errors from stats
+        is_benign = any(x in error for x in [
+            "Conflict: terminated by other getUpdates",
+            "Timeout 5000ms exceeded",
+            "net::ERR_HTTP2_PROTOCOL_ERROR",
+            "Execution context was destroyed"
+        ])
+        
+        if not is_benign:
+            logger.error(f"Error: {error}")
+            stats.track("errors")
+            await self_learner.learn_from_error(error)
+            
+            # Ask AI for solution for serious errors only
+            if "Conflict" not in error:
+                solution = await smart.ask(f"How do I fix: {error[:200]}")
+                if solution:
+                    infinite_brain.learn("error_solution", solution, "openai")
+                await bestie.report_problem(error[:100])
+        else:
+            logger.warning(f"Ignored benign error: {error[:100]}")
     
     async def _send_daily_stats(self):
         """Send stats report to Telegram every 6 hours"""
