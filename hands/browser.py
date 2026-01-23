@@ -51,8 +51,8 @@ class BrowserController:
         self._error_screenshots_dir = DATA_DIR / "error_screenshots"
         self._last_successful_url = None
         
-    async def initialize(self, headless: bool = True):
-        """Initialize the browser with retry"""
+    async def initialize(self, headless: bool = False):
+        """Initialize the browser with retry - HEADFUL by default for real interactions"""
         if self._is_initialized:
             return
         

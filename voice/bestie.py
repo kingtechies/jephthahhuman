@@ -73,36 +73,86 @@ class TelegramBestie:
         )
     
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show REAL live stats from the tracker"""
         if str(update.effective_user.id) != str(self.owner_id) and self.owner_id:
             return
         
         try:
-            from brain.multitask import multitasker
-            status = multitasker.status()
+            from brain.stats_tracker import stats
+            from income.job_machine import job_machine
+            from hands.browser import browser
             
-            running = status.get('running', [])[:5]
-            completed = status.get('completed_count', 0)
+            today_stats = stats.get_today()
             
-            msg = f"What's up! Here's what I'm doing rn:\n\n"
-            if running:
-                msg += f"🔥 Active: {', '.join(running)}\n"
-            else:
-                msg += "🔥 Just browsing and looking for opportunities\n"
-            msg += f"✅ Tasks done today: {completed}\n"
-            msg += "\nHit me if you need something specific!"
-        except:
-            msg = "I'm running and working on stuff - browser's open, looking for opportunities. All good! 💪"
-        
-        await update.message.reply_text(msg)
+            # Get live browser info
+            current_url = "initializing..."
+            try:
+                if browser._is_initialized and browser.page:
+                    current_url = await browser.get_current_url()
+            except:
+                pass
+            
+            msg = f"""📊 **LIVE SERVER STATUS**
+
+🌐 **Browser**: {'ACTIVE' if browser._is_initialized else 'STARTING'}
+🔗 **Current URL**: {current_url[:50]}...
+
+💼 **Jobs Today**:
+• Found: {today_stats.get('jobs_found', 0)}
+• Applied: {today_stats.get('jobs_applied', 0)}
+• Verified: {today_stats.get('jobs_verified', 0)}
+• Total Ever: {job_machine.applied_count}
+
+📧 **Emails Today**:
+• Received: {today_stats.get('emails_received', 0)}
+• Sent: {today_stats.get('emails_sent', 0)}
+• Cold Outreach: {today_stats.get('cold_emails_sent', 0)}
+
+📝 **Content**:
+• Tweets: {today_stats.get('tweets_posted', 0)}
+• Articles: {today_stats.get('articles_written', 0)}
+• Forums: {today_stats.get('forums_joined', 0)}
+
+⚠️ Errors: {today_stats.get('errors', 0)}
+"""
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"Status check error: {e}")
     
     async def _cmd_jobs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show REAL job application stats"""
         if str(update.effective_user.id) != str(self.owner_id) and self.owner_id:
             return
-        await update.message.reply_text(
-            "Job hunting is always on 💼\n\n"
-            "I'm checking Indeed, LinkedIn, freelance sites - the whole deal.\n"
-            "When I find something solid, you'll be the first to know!"
-        )
+        
+        try:
+            from income.job_machine import job_machine
+            from brain.stats_tracker import stats
+            
+            today_stats = stats.get_today()
+            recent_apps = job_machine.applications_history[-5:]  # Last 5
+            
+            msg = f"""💼 **JOB APPLICATION STATUS**
+
+🎯 **Today**:
+• Jobs Found: {today_stats.get('jobs_found', 0)}
+• Applied: {today_stats.get('jobs_applied', 0)}
+• Verified Success: {today_stats.get('jobs_verified', 0)}
+
+📈 **All Time**: {job_machine.applied_count} applications
+
+🗒️ **Recent Applications**:
+"""
+            for app in reversed(recent_apps):
+                title = app.get('title', 'Unknown')[:40]
+                company = app.get('company', 'Unknown')[:20]
+                msg += f"• {title} @ {company}\n"
+            
+            if not recent_apps:
+                msg += "No applications yet today\n"
+            
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"Job stats error: {e}")
     
     async def _cmd_earnings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(update.effective_user.id) != str(self.owner_id) and self.owner_id:

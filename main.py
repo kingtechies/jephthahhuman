@@ -333,25 +333,37 @@ Write a helpful, specific reply addressing their actual message. Keep it under 1
             await asyncio.sleep(1800)
     
     async def _send_cold_emails(self):
-        """Dedicated loop for cold email outreach"""
+        """Dedicated loop for cold email outreach - HOURLY to ALL unsent leads"""
         while self.running:
             try:
-                # AI generates personalized cold emails
-                subject = await smart.ask("Write a short, catchy subject line for a cold email offering Python, AI, and web development services")
-                body = await smart.ask("Write a short, professional cold email offering my services as a Python developer, AI specialist, and web developer. Keep it under 150 words. I am Jephthah Ameh.")
+                # Get ALL leads not yet contacted
+                leads = crm.get_leads(status="new", limit=500)  # Get up to 500 leads
                 
-                # Send to any leads from CRM
-                leads = crm.get_leads(status="new", limit=5)
-                for lead in leads:
-                    if lead.get("email"):
-                        await cold_mailer.send_cold_email(lead["email"], subject[:100], body)
-                        crm.update_lead(lead["id"], status="contacted")
-                
-                sent = cold_mailer.sent_count
-                if sent > 0:
-                    await bestie.send(f"📧 Cold outreach: {sent} emails sent today!")
+                if leads:
+                    logger.info(f"📧 Cold emailing {len(leads)} leads...")
+                    sent_count = 0
+                    
+                    for lead in leads:
+                        if lead.get("email"):
+                            # AI generates personalized cold email
+                            subject = await smart.ask("Write a short, catchy subject line for a cold email offering Python, AI, and web development services. Max 50 chars, no quotes.")
+                            body = await smart.ask("Write a short, professional cold email offering my services as a Python developer, AI specialist, and web developer. Keep it under 100 words. I am Jephthah Ameh. hireme@jephthahameh.cfd")
+                            
+                            if subject and body:
+                                success = await cold_mailer.send_cold_email(lead["email"], subject[:60], body)
+                                if success:
+                                    crm.update_lead(lead["id"], status="contacted")
+                                    sent_count += 1
+                                    stats.track("cold_emails_sent")
+                            
+                            await asyncio.sleep(5)  # 5 sec between emails
+                    
+                    if sent_count > 0:
+                        await bestie.send(f"📧 Cold outreach: Sent {sent_count} emails this hour!")
+                        
             except Exception as e:
                 logger.error(f"Cold email error: {e}")
+            
             await asyncio.sleep(3600)  # Every hour
     
     async def _freelance_hustle(self):
@@ -478,15 +490,16 @@ Write a helpful, specific reply addressing their actual message. Keep it under 1
                     try:
                         logger.info(f"🌐 Attempting to join: {forum_name}")
                         
-                        # Use smart registrar
-                        success = await smart_registrar.register(forum_name, forum_url)
+                        # Use smart registrar with URL
+                        result = await smart_registrar.register_url(forum_name, forum_url)
                         
-                        if success:
+                        if result.get("status") == "success":
                             already_registered.add(forum_name)
                             with open(registered_file, 'w') as f:
                                 json.dump(list(already_registered), f)
                             
-                            await bestie.send(f"✅ Registered on: {forum_name}")
+                            stats.track("forums_joined")
+                            await bestie.send(f"✅ Registered on: {forum_name} as {result.get('username', 'unknown')}")
                             logger.info(f"✅ Registered on {forum_name}")
                         
                         await asyncio.sleep(60)  # Wait between registrations

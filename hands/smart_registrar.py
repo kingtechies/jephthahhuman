@@ -41,6 +41,7 @@ class SmartRegistrar:
         ]
     
     async def register(self, platform: str) -> Dict:
+        """Register on a known platform by name"""
         info = self.platforms.get(platform)
         if not info:
             return {"platform": platform, "status": "unknown"}
@@ -54,6 +55,10 @@ class SmartRegistrar:
                 return {"platform": platform, "status": "pending_phone"}
         
         return await self._do_register(platform, url, phone_req)
+    
+    async def register_url(self, platform: str, url: str) -> Dict:
+        """Register on any URL with given platform name"""
+        return await self._do_register(platform, url, "never")
     
     async def _ask_for_phone(self, platform: str) -> Optional[str]:
         from voice.bestie import bestie
