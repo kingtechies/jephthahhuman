@@ -920,6 +920,32 @@ _{body_preview}..._
                 parse_mode="Markdown"
             )
             logger.info(f"Offer alert sent for {offer_id}")
+            
+            # --- REDUNDANCY: EMAIL BACKUP ---
+            # Send email to owner in case Telegram fails
+            from voice.email_handler import email_client
+            from config.settings import config
+            
+            if config.owner.email:
+                email_subject = f"🔥 NEW OFFER: {client_name} ({subject[:30]}...)"
+                email_body = f"""You have a new offer awaiting action in Jephthah!
+
+Client: {client_name}
+Email: {client_email}
+Subject: {subject}
+
+Preview:
+{body_preview}
+
+---------------------------------------------------
+ACTION REQUIRED:
+Check Telegram to Accept/Reject with one click.
+If Telegram is down, reply to the client manually.
+---------------------------------------------------
+"""
+                await email_client.send_email(config.owner.email, email_subject, email_body)
+                logger.info(f"Offer backup email sent to {config.owner.email}")
+                
         except Exception as e:
             logger.error(f"Offer alert error: {e}")
 
