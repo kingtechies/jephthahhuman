@@ -61,16 +61,17 @@ class Jephthah:
         logger.info("JEPHTHAH - TRUE HUMAN - INITIALIZED - OPUS ENABLED")
     
     async def wake_up(self):
-        logger.info("AWAKENING - I AM JEPHTHAH")
+        logger.info("AWAKENING - EMAIL MARKETING MACHINE")
         
-        await browser.initialize(headless=False)
-        logger.info("Eyes online")
+        # HEADLESS for performance and stability
+        await browser.initialize(headless=True)
+        logger.info("Browser online (headless mode)")
         
         if config.communication.telegram_bot_token:
             try:
                 await bestie.initialize()
                 await bestie.start()
-                logger.info("Bestie online")
+                logger.info("Telegram bestie online")
             except Exception as e:
                 logger.error(f"Telegram start failed (continuing without it): {e}")
         
@@ -79,23 +80,21 @@ class Jephthah:
         self.running = True
         self.start_time = datetime.utcnow()
         
-        await bestie.send("Hey bestie! 🔥 I've upgraded my brain to Claude Opus. Evolution protocols active.")
+        await bestie.send("🚀 EMAIL MARKETING MACHINE ONLINE!\n\nI will:\n• Scrape 1000+ company emails/day\n• Send 500 cold emails/hour\n• Find jobs and email companies directly\n\nLet's get you contracts!")
         
-        asyncio.create_task(self._learn_forever())
-        asyncio.create_task(self._apply_forever())
-        asyncio.create_task(self._post_forever())
-        asyncio.create_task(self._watch_news())
-        asyncio.create_task(self._trade_crypto())
-        asyncio.create_task(self._check_emails())
-        asyncio.create_task(self._evolve_daily())
-        asyncio.create_task(self._hunt_memes())
-        asyncio.create_task(self._send_cold_emails())
-        asyncio.create_task(self._freelance_hustle())
-        asyncio.create_task(self._scrape_leads())  # New: Scrape company emails for cold outreach
-        asyncio.create_task(self._join_tech_forums())  # New: Register on all tech forums
-        asyncio.create_task(self._send_daily_stats())  # Daily stats report to Telegram
+        # === CORE EMAIL MARKETING LOOPS ===
+        asyncio.create_task(self._aggressive_email_scraper())  # Scrape 1000+ emails/day
+        asyncio.create_task(self._mass_email_sender())         # Send 500/hour
+        asyncio.create_task(self._job_email_outreach())        # Scrape job company emails & email them
+        asyncio.create_task(self._check_emails())              # Monitor inbox for replies
+        asyncio.create_task(self._send_daily_stats())          # Report to Telegram
         
-        logger.info("ALL SYSTEMS 100% OPERATIONAL")
+        # === DISABLED - Social posting not working ===
+        # asyncio.create_task(self._post_forever())
+        # asyncio.create_task(self._join_tech_forums())
+        # asyncio.create_task(self._hunt_memes())
+        
+        logger.info("EMAIL MARKETING MACHINE OPERATIONAL")
     
     async def shutdown(self):
         self.running = False
@@ -554,6 +553,321 @@ Write a helpful, specific reply addressing their actual message. Keep it under 1
             except Exception as e:
                 logger.error(f"Stats report error: {e}")
                 await asyncio.sleep(3600)  # Wait 1 hour on error
+    
+    async def _aggressive_email_scraper(self):
+        """Scrape 1000+ company emails per day from multiple sources"""
+        import re
+        email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        
+        # Massive list of sources to scrape
+        sources = [
+            # Tech directories
+            "https://www.ycombinator.com/companies",
+            "https://www.producthunt.com",
+            "https://angel.co/companies",
+            "https://www.crunchbase.com/discover/organizations",
+            "https://github.com/trending",
+            "https://www.indiehackers.com/products",
+            
+            # Job sites (scrape company contacts, not apply)
+            "https://www.indeed.com/jobs?q=python+developer&l=remote",
+            "https://www.linkedin.com/jobs/search?keywords=developer&location=Remote",
+            "https://www.glassdoor.com/Job/remote-python-developer-jobs-SRCH_IL.0,6_IS11047_KO7,23.htm",
+            "https://remoteok.com/remote-dev-jobs",
+            "https://weworkremotely.com/remote-jobs/search?term=developer",
+            "https://www.dice.com/jobs?q=software+developer&location=Remote",
+            
+            # Startup/Agency directories
+            "https://clutch.co/developers",
+            "https://www.goodfirms.co/companies/software-development",
+            "https://www.sortlist.com/software-development",
+            "https://toptal.com",
+            
+            # Tech blogs/directories
+            "https://news.ycombinator.com",
+            "https://dev.to",
+            "https://hashnode.com",
+        ]
+        
+        exclude_domains = ['example.com', 'email.com', 'test.com', 'yahoo.com', 
+                           'hotmail.com', 'outlook.com', 'mail.com', 'noreply', 'no-reply']
+        
+        scraped_today = 0
+        scraped_emails_file = DATA_DIR / "scraped_emails.json"
+        
+        # Load existing emails
+        try:
+            if scraped_emails_file.exists():
+                with open(scraped_emails_file, 'r') as f:
+                    all_emails = set(json.load(f))
+            else:
+                all_emails = set()
+        except:
+            all_emails = set()
+        
+        while self.running:
+            try:
+                for source in sources:
+                    try:
+                        await browser.goto(source)
+                        await asyncio.sleep(2)
+                        
+                        # Get page text and extract emails
+                        page_text = await browser.get_page_text()
+                        found_emails = email_pattern.findall(page_text)
+                        
+                        # Filter and add new emails
+                        for email in found_emails:
+                            email_lower = email.lower()
+                            if not any(x in email_lower for x in exclude_domains):
+                                if email_lower not in all_emails:
+                                    all_emails.add(email_lower)
+                                    await crm.add_lead(source=source, contact=email, value=100.0)
+                                    scraped_today += 1
+                                    stats.track("leads_scraped")
+                        
+                        # Also check linked pages
+                        links = await browser.get_all_links()
+                        for link in links[:30]:
+                            href = link.get("href", "")
+                            if any(x in href.lower() for x in ["contact", "about", "team", "company"]):
+                                try:
+                                    await browser.goto(href)
+                                    await asyncio.sleep(1)
+                                    sub_text = await browser.get_page_text()
+                                    sub_emails = email_pattern.findall(sub_text)
+                                    for email in sub_emails:
+                                        email_lower = email.lower()
+                                        if not any(x in email_lower for x in exclude_domains):
+                                            if email_lower not in all_emails:
+                                                all_emails.add(email_lower)
+                                                await crm.add_lead(source=href, contact=email, value=150.0)
+                                                scraped_today += 1
+                                                stats.track("leads_scraped")
+                                except:
+                                    continue
+                        
+                        await asyncio.sleep(2)
+                        
+                    except Exception as e:
+                        logger.debug(f"Scrape error for {source}: {e}")
+                        continue
+                
+                # Save all emails
+                with open(scraped_emails_file, 'w') as f:
+                    json.dump(list(all_emails), f)
+                
+                logger.info(f"📧 Email scraper: {scraped_today} new today, {len(all_emails)} total")
+                if scraped_today > 0:
+                    await bestie.send(f"📧 Scraped {scraped_today} new emails today!\\nTotal in database: {len(all_emails)}")
+                
+                scraped_today = 0  # Reset for next cycle
+                
+            except Exception as e:
+                logger.error(f"Email scraper error: {e}")
+            
+            await asyncio.sleep(1800)  # Run every 30 minutes
+    
+    async def _mass_email_sender(self):
+        """Send 500 cold emails per hour (8-10 per minute)"""
+        from voice.email_handler import email_client
+        
+        # High-converting email templates
+        templates = [
+            {
+                "subject": "Quick question about {company}",
+                "body": """Hi,
+
+I noticed {company} and was impressed by your work.
+
+I'm Jephthah, a software developer specializing in Python, AI, Flutter, and web development. I help companies like yours:
+• Build custom software solutions
+• Automate repetitive tasks
+• Create mobile and web apps
+
+Would you be open to a quick chat about any development needs you might have?
+
+Best,
+Jephthah Ameh
+hireme@jephthahameh.cfd
+https://jephthahameh.cfd"""
+            },
+            {
+                "subject": "Can I help with your development needs?",
+                "body": """Hi there,
+
+I came across your company and wanted to reach out.
+
+I'm a full-stack developer offering:
+✅ Python/Django/Flask development
+✅ Mobile apps (Flutter)
+✅ AI/ML integration
+✅ Web automation
+
+I'd love to hear about any projects you're working on. What's a good time this week for a quick call?
+
+Cheers,
+Jephthah Ameh
+hireme@jephthahameh.cfd"""
+            },
+            {
+                "subject": "Developer available for contracts",
+                "body": """Hello,
+
+Looking for a reliable developer? I specialize in:
+• Custom software development
+• AI and automation solutions
+• Mobile and web applications
+• API development
+
+I offer competitive rates and fast delivery. Let's discuss how I can help your team.
+
+Reply to this email or book a call: jephthahameh.cfd
+
+Best regards,
+Jephthah Ameh"""
+            }
+        ]
+        
+        sent_today = 0
+        sent_emails_file = DATA_DIR / "sent_emails.json"
+        
+        # Load sent emails to avoid duplicates
+        try:
+            if sent_emails_file.exists():
+                with open(sent_emails_file, 'r') as f:
+                    sent_emails = set(json.load(f))
+            else:
+                sent_emails = set()
+        except:
+            sent_emails = set()
+        
+        while self.running:
+            try:
+                # Get unsent leads
+                leads = crm.get_leads(status="new", limit=100)
+                
+                if not leads:
+                    logger.info("No new leads to email, waiting...")
+                    await asyncio.sleep(300)  # Wait 5 min if no leads
+                    continue
+                
+                for lead in leads:
+                    email = lead.get("email") or lead.get("contact")
+                    if not email or email in sent_emails:
+                        continue
+                    
+                    try:
+                        # Pick template
+                        import random
+                        template = random.choice(templates)
+                        
+                        # Personalize
+                        company = lead.get("source", "your company").split("/")[-1].replace("-", " ").title()
+                        subject = template["subject"].replace("{company}", company[:30])
+                        body = template["body"].replace("{company}", company[:30])
+                        
+                        # Send email
+                        success = await email_client.send_email(email, subject, body)
+                        
+                        if success:
+                            sent_emails.add(email)
+                            crm.update_lead(lead.get("id"), status="contacted")
+                            sent_today += 1
+                            stats.track("cold_emails_sent")
+                            logger.info(f"📤 Cold email sent to: {email}")
+                        
+                        # Rate limit: ~8 emails per minute for 500/hour
+                        await asyncio.sleep(7)
+                        
+                    except Exception as e:
+                        logger.debug(f"Email send error to {email}: {e}")
+                        continue
+                
+                # Save sent emails
+                with open(sent_emails_file, 'w') as f:
+                    json.dump(list(sent_emails), f)
+                
+                if sent_today > 0:
+                    logger.info(f"📤 Sent {sent_today} cold emails this hour")
+                    await bestie.send(f"📤 Cold email blast: {sent_today} emails sent!\\nTotal sent: {len(sent_emails)}")
+                
+                sent_today = 0
+                
+            except Exception as e:
+                logger.error(f"Mass email sender error: {e}")
+            
+            await asyncio.sleep(60)  # Check for new leads every minute
+    
+    async def _job_email_outreach(self):
+        """Find jobs, scrape company emails, and email them directly (instead of applying)"""
+        import re
+        email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+        
+        job_sites = [
+            ("Indeed", "https://www.indeed.com/jobs?q={skill}&l=remote"),
+            ("LinkedIn", "https://www.linkedin.com/jobs/search?keywords={skill}&location=Remote"),
+            ("Dice", "https://www.dice.com/jobs?q={skill}&location=Remote"),
+            ("RemoteOK", "https://remoteok.com/remote-{skill}-jobs"),
+            ("FlexJobs", "https://www.flexjobs.com/search?search={skill}&location=Remote"),
+        ]
+        
+        skills = ["python-developer", "flutter-developer", "react-developer", "full-stack-developer", 
+                  "backend-developer", "ai-engineer", "software-engineer"]
+        
+        while self.running:
+            try:
+                for skill in skills:
+                    for site_name, url_template in job_sites:
+                        try:
+                            url = url_template.format(skill=skill)
+                            await browser.goto(url)
+                            await asyncio.sleep(3)
+                            
+                            # Get job links
+                            links = await browser.get_all_links()
+                            job_links = [l for l in links if "job" in l.get("href", "").lower() or 
+                                        "company" in l.get("href", "").lower()][:10]
+                            
+                            for job_link in job_links:
+                                try:
+                                    href = job_link.get("href", "")
+                                    if not href.startswith("http"):
+                                        continue
+                                    
+                                    await browser.goto(href)
+                                    await asyncio.sleep(2)
+                                    
+                                    page_text = await browser.get_page_text()
+                                    
+                                    # Extract company contact emails
+                                    emails = email_pattern.findall(page_text)
+                                    for email in emails[:3]:
+                                        if not any(x in email.lower() for x in ['noreply', 'no-reply', 'example']):
+                                            await crm.add_lead(
+                                                source=f"job:{site_name}:{skill}",
+                                                contact=email,
+                                                value=200.0,
+                                                notes=f"Job posting for {skill}"
+                                            )
+                                            stats.track("jobs_found")
+                                            logger.info(f"💼 Found job company email: {email} for {skill}")
+                                    
+                                except Exception as e:
+                                    continue
+                            
+                        except Exception as e:
+                            logger.debug(f"Job scrape error for {site_name}: {e}")
+                            continue
+                        
+                        await asyncio.sleep(5)
+                
+                await bestie.send("💼 Job email outreach scan complete! New leads added to CRM.")
+                
+            except Exception as e:
+                logger.error(f"Job email outreach error: {e}")
+            
+            await asyncio.sleep(3600)  # Run every hour
     
     async def register_everywhere(self):
         await smart_registrar.register_email_only()
