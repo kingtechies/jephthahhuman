@@ -25,6 +25,7 @@ class TelegramBestie:
         self.conversations = []
         self.pending_tasks = []  # Tasks owner asked me to do
         self.account_details = {}  # Saved account details for invoices
+        self.pending_offers = {}  # Pending offers awaiting owner decision {offer_id: offer_data}
         
     async def initialize(self):
         if not HAS_TELEGRAM or not self.token:
@@ -40,7 +41,9 @@ class TelegramBestie:
         self.app.add_handler(CommandHandler("earnings", self._cmd_earnings))
         self.app.add_handler(CommandHandler("help", self._cmd_help))
         self.app.add_handler(CommandHandler("invoice", self._cmd_invoice))
+        self.app.add_handler(CommandHandler("offers", self._cmd_offers))
         self.app.add_handler(CallbackQueryHandler(self._handle_payment_callback, pattern="^payment_"))
+        self.app.add_handler(CallbackQueryHandler(self._handle_offer_callback, pattern="^offer_"))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
         self.app.add_handler(MessageHandler(filters.VOICE, self._handle_voice))
         
@@ -778,6 +781,147 @@ I've asked them for project details. When they reply, you can create an invoice 
             logger.info(f"Invoice request alert sent for {client_name}")
         except Exception as e:
             logger.error(f"Invoice request alert error: {e}")
+
+    async def _cmd_offers(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List pending offers awaiting decision"""
+        if str(update.effective_user.id) != str(self.owner_id) and self.owner_id:
+            return
+        
+        if not self.pending_offers:
+            await update.message.reply_text("No pending offers right now. I'll alert you when one comes in! 🕵️")
+            return
+        
+        await update.message.reply_text(f"📋 **{len(self.pending_offers)} Pending Offers**:\n\nReviewing details...")
+        
+        for offer_id, offer in self.pending_offers.items():
+            await self.send_offer_alert(
+                client_name=offer.get("client_name", "Unknown"),
+                client_email=offer.get("client_email", ""),
+                subject=offer.get("subject", ""),
+                body_preview=offer.get("body", "")[:200],
+                offer_id=offer_id
+            )
+            await asyncio.sleep(1)
+
+    async def _handle_offer_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle Accept/Reject/Details buttons for offers"""
+        query = update.callback_query
+        await query.answer()
+        
+        try:
+            data = query.data
+            action, offer_id = data.replace("offer_", "").split("_", 1)
+            
+            offer = self.pending_offers.get(offer_id)
+            if not offer:
+                await query.edit_message_text("❌ Offer data expired or not found.")
+                return
+            
+            from voice.email_handler import email_client
+            
+            if action == "accept":
+                # Auto-reply accepting the offer
+                reply_body = f"""Hi {offer['client_name']},
+
+Thank you for the offer! I accept.
+
+I'm excited to work on this project with you. 
+
+Could you please share the next steps? Do you have specific requirements or a contract to sign?
+
+Also, let me know when you're ready for me to start.
+
+Best regards,
+Jephthah Ameh
+Full-Stack Developer"""
+                
+                success = await email_client.reply(offer['email_obj'], reply_body)
+                
+                if success:
+                    await query.edit_message_text(f"✅ **ACCEPTED & REPLIED**\n\nClient: {offer['client_name']}\nSubject: {offer['subject']}\n\nI've sent an acceptance email asking for next steps/contract. 🚀")
+                    if offer_id in self.pending_offers:
+                        del self.pending_offers[offer_id]
+                else:
+                    await query.edit_message_text("❌ Failed to send reply email. Please check logs.")
+            
+            elif action == "reject":
+                # Auto-reply declining politely
+                reply_body = f"""Hi {offer['client_name']},
+
+Thank you for the offer. Unfortunately, I'm fully booked with other projects right now and won't be able to take this on.
+
+I appreciate you considering me.
+
+Best regards,
+Jephthah Ameh"""
+                
+                success = await email_client.reply(offer['email_obj'], reply_body)
+                
+                if success:
+                    await query.edit_message_text(f"🚫 **DECLINED**\n\nClient: {offer['client_name']}\n\nI've sent a polite rejection email.")
+                    if offer_id in self.pending_offers:
+                        del self.pending_offers[offer_id]
+            
+            elif action == "details":
+                # Show full details
+                full_msg = f"""📄 **OFFER DETAILS**
+                
+**From:** {offer['client_name']} ({offer['client_email']})
+**Subject:** {offer['subject']}
+
+**Message:**
+{offer['body']}
+
+-------------------
+*Reply via buttons above to Accept/Reject*"""
+                # Send as new message to keep buttons on original
+                await context.bot.send_message(chat_id=self.owner_id, text=full_msg, parse_mode="Markdown")
+
+        except Exception as e:
+            logger.error(f"Offer callback error: {e}")
+            await query.edit_message_text(f"Error processing offer: {e}")
+
+    async def send_offer_alert(self, client_name: str, client_email: str, subject: str, 
+                              body_preview: str, offer_id: str):
+        """Alert owner about a new job/project offer"""
+        if not self.bot or not self.owner_id:
+            return
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Accept & Reply", callback_data=f"offer_accept_{offer_id}"),
+                InlineKeyboardButton("❌ Reject", callback_data=f"offer_reject_{offer_id}"),
+            ],
+            [
+                InlineKeyboardButton("📜 View Details", callback_data=f"offer_details_{offer_id}"),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        msg = f"""🎉 **NEW OFFER DETECTED!**
+        
+👤 **Client:** {client_name}
+📧 **Email:** {client_email}
+📌 **Subject:** {subject}
+
+📝 **Preview:**
+_{body_preview}..._
+
+**What should I do?**
+• **Accept:** I'll reply accepting and ask for next steps.
+• **Reject:** I'll politely decline.
+• **Details:** See full email."""
+        
+        try:
+            await self.bot.send_message(
+                chat_id=self.owner_id,
+                text=msg,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            logger.info(f"Offer alert sent for {offer_id}")
+        except Exception as e:
+            logger.error(f"Offer alert error: {e}")
 
 
 bestie = TelegramBestie()

@@ -228,8 +228,39 @@ class Jephthah:
                     if not sender or not body.strip():
                         continue
                     
-                    # Notify Telegram
-                    is_priority = any(w in subject.lower() for w in ["interview", "opportunity", "job", "offer", "urgent"])
+                    # === OFFER DETECTION ===
+                    is_offer = any(w in subject.lower() or w in body.lower() for w in ["job offer", "contract offer", "employment offer", "project offer", "proposal accepted", "hired"])
+                    
+                    if is_offer:
+                        offer_id = f"offer_{int(datetime.utcnow().timestamp())}"
+                        
+                        # Store in Bestie for callback handling
+                        bestie.pending_offers[offer_id] = {
+                            "client_name": sender_name,
+                            "client_email": sender,
+                            "subject": subject,
+                            "body": body,
+                            "email_obj": em,
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                        
+                        # Send Interactive Alert
+                        await bestie.send_offer_alert(
+                            client_name=sender_name,
+                            client_email=sender,
+                            subject=subject,
+                            body_preview=body[:300],
+                            offer_id=offer_id
+                        )
+                        
+                        # Mark as replied so we don't auto-reply immediately
+                        replied_ids.add(email_id)
+                        with open(replied_file, 'w') as f:
+                            json.dump(list(replied_ids), f)
+                        continue
+
+                    # Notify Telegram for other priority stuff
+                    is_priority = any(w in subject.lower() for w in ["interview", "opportunity", "urgent"])
                     emoji = "🔥" if is_priority else "📧"
                     await bestie.send(f"{emoji} Email from {sender_name}: {subject[:50]}")
                     
